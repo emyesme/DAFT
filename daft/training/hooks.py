@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
 import numbers
+import numpy as np
+from matplotlib import pyplot as plt
 from pathlib import Path
 from typing import Dict, Optional, Sequence
 from urllib.parse import quote
@@ -68,12 +70,12 @@ class CheckpointSaver(Hook):
     """
 
     def __init__(
-        self,
-        model: Module,
-        checkpoint_dir: str,
-        save_every_n_epochs: int = 1,
-        max_keep: Optional[int] = None,
-        metrics: Optional[Sequence[Metric]] = None,
+            self,
+            model: Module,
+            checkpoint_dir: str,
+            save_every_n_epochs: int = 1,
+            max_keep: Optional[int] = None,
+            metrics: Optional[Sequence[Metric]] = None,
     ) -> None:
         self._model = model
         self._checkpoint_dir = Path(checkpoint_dir)
@@ -116,6 +118,7 @@ class CheckpointSaver(Hook):
         torch.save(
             self._model.state_dict(), path,
         )
+        # save every confusion matrix
 
         return path
 
@@ -176,7 +179,22 @@ class TensorBoardLogger(Hook):
     def _write_all(self):
         for m in self._metrics:
             for name, value in m.values().items():
-                self._write(name, value)
+                if "conf_matrix" not in name:
+                    self._write(name, value)
+                else:
+                    # add confusion matrix
+                    # https://christianbernecker.medium.com/how-to-create-a-confusion-matrix-with-tensorboard-and-pytorch-3344ad5e7209
+                    import seaborn as sn
+                    import pandas as pd
+
+                    matrix = m.values_matrix()
+                    classes = ["CIS","RR", "SP","PP"]  # when checking the create.hd5 just count and compare
+                    df_cm = pd.DataFrame(matrix["conf_matrix"],
+                                         index=[i for i in classes],
+                                         columns=[i for i in classes])
+                    plt.figure(figsize=(12, 7))
+                    fig_conf_matrix = sn.heatmap(df_cm, annot=True).get_figure()
+                    self._writer.add_figure('confusion matrix', fig_conf_matrix, global_step=self._epoch)
 
     def _write(self, name: str, value):
         if isinstance(value, numbers.Number):

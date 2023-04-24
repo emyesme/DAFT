@@ -28,17 +28,17 @@ from .wrappers import DataLoaderWrapper
 
 
 def train_and_evaluate(
-    model: BaseModel,
-    loss: BaseModel,
-    train_data: DataLoaderWrapper,
-    optimizer: Optimizer,
-    scheduler: Optional[_LRScheduler] = None,
-    num_epochs: int = 1,
-    eval_data: Optional[DataLoaderWrapper] = None,
-    train_hooks: Optional[Sequence[Hook]] = None,
-    eval_hooks: Optional[Sequence[Hook]] = None,
-    device: Optional[torch.device] = None,
-    progressbar: bool = True,
+        model: BaseModel,
+        loss: BaseModel,
+        train_data: DataLoaderWrapper,
+        optimizer: Optimizer,
+        scheduler: Optional[_LRScheduler] = None,
+        num_epochs: int = 1,
+        eval_data: Optional[DataLoaderWrapper] = None,
+        train_hooks: Optional[Sequence[Hook]] = None,
+        eval_hooks: Optional[Sequence[Hook]] = None,
+        device: Optional[torch.device] = None,
+        progressbar: bool = True,
 ) -> None:
     """Train and evaluate a model.
 
@@ -90,8 +90,10 @@ def train_and_evaluate(
         hooks=train_hooks,
         progressbar=progressbar,
     )
-
     get_lr = itemgetter("lr")
+
+    early_stopping = EarlyStopping(tolerance=10, min_delta=10)
+
     for i in range(num_epochs):
         lr = [get_lr(pg) for pg in optimizer.param_groups]
         print("EPOCH: {:>3d};    Learning rate: {}".format(i, lr))
@@ -99,7 +101,28 @@ def train_and_evaluate(
         if evaluator is not None:
             evaluator.run()
         if scheduler is not None:
+            #scheduler.step(evaluator.outputs['cross_entropy'])
             scheduler.step()
+
+        # early stopping
+        early_stopping(trainer.outputs["cross_entropy"], evaluator.outputs["cross_entropy"])
+        if early_stopping.early_stop:
+            print("we apply early stopping at epoch : ", i)
+            break
+
+class EarlyStopping:
+    def __init__(self, tolerance=5, min_delta=0):
+
+        self.tolerance = tolerance
+        self.min_delta = min_delta
+        self.counter = 0
+        self.early_stop = False
+
+    def __call__(self, train_loss, validation_loss):
+        if (validation_loss - train_loss) > self.min_delta:
+            self.counter += 1
+            if self.counter >= self.tolerance:
+                self.early_stop = True
 
 
 class ModelRunner:
@@ -120,12 +143,12 @@ class ModelRunner:
     """
 
     def __init__(
-        self,
-        model: BaseModel,
-        data: DataLoaderWrapper,
-        device: Optional[torch.device] = None,
-        hooks: Optional[Sequence[Hook]] = None,
-        progressbar: bool = True,
+            self,
+            model: BaseModel,
+            data: DataLoaderWrapper,
+            device: Optional[torch.device] = None,
+            hooks: Optional[Sequence[Hook]] = None,
+            progressbar: bool = True,
     ) -> None:
         if device is not None:
             model = model.to(device)
@@ -135,6 +158,7 @@ class ModelRunner:
         self.device = device
         self.hooks = hooks or []
         self.progressbar = progressbar
+        self.outputs = None
 
     def _dispatch(self, func: str, *args) -> None:
         with torch.no_grad():
@@ -144,7 +168,7 @@ class ModelRunner:
 
     def _batch_to_device(self, batch: Union[Tensor, Sequence[Tensor]]) -> Dict[str, Tensor]:
         if not isinstance(batch, (list, tuple)):
-            batch = tuple(batch,)
+            batch = tuple(batch, )
 
         assert len(self.data.output_names) == len(
             batch
@@ -172,19 +196,18 @@ class ModelRunner:
         for batch in pbar:
             batch = self._batch_to_device(batch)
             self._dispatch("before_step", batch)
-
-            outputs = self._step(batch)
-
-            self._dispatch("after_step", outputs)
+            self.outputs = self._step(batch)  # to track outputs for schedulers that follow the metric
+            self._dispatch("after_step", self.outputs)
 
         self._dispatch("on_end_epoch")
 
     def _get_model_inputs_from_batch(self, batch: Dict[str, Tensor]) -> Sequence[Tensor]:
+        # no get rid of unnecessary dimensions when adding multiple channels
+        batch["image"] = batch["image"].squeeze(0).squeeze(1)
         assert len(batch) >= len(self.model.input_names), "model expects {:d} inputs, but batch has only {:d}".format(
             len(self.model.input_names), len(batch)
         )
-
-        in_batch = tuple(batch[k] for k in self.model.input_names)
+        in_batch = tuple([batch[k] for k in self.model.input_names])
         return in_batch
 
     def _step(self, batch: Dict[str, Tensor]) -> Dict[str, Tensor]:
@@ -220,13 +243,13 @@ class ModelEvaluator(ModelRunner):
     """
 
     def __init__(
-        self,
-        model: BaseModel,
-        loss: BaseModel,
-        data: DataLoaderWrapper,
-        device: Optional[torch.device] = None,
-        hooks: Optional[Sequence[Hook]] = None,
-        progressbar: bool = True,
+            self,
+            model: BaseModel,
+            loss: BaseModel,
+            data: DataLoaderWrapper,
+            device: Optional[torch.device] = None,
+            hooks: Optional[Sequence[Hook]] = None,
+            progressbar: bool = True,
     ) -> None:
         super().__init__(
             model=model, data=data, device=device, hooks=hooks, progressbar=progressbar,
@@ -290,14 +313,14 @@ class ModelTrainer(ModelEvaluator):
     """
 
     def __init__(
-        self,
-        model: BaseModel,
-        loss: BaseModel,
-        data: DataLoaderWrapper,
-        optimizer: Optimizer,
-        device: Optional[torch.device] = None,
-        hooks: Optional[Sequence[Hook]] = None,
-        progressbar: bool = True,
+            self,
+            model: BaseModel,
+            loss: BaseModel,
+            data: DataLoaderWrapper,
+            optimizer: Optimizer,
+            device: Optional[torch.device] = None,
+            hooks: Optional[Sequence[Hook]] = None,
+            progressbar: bool = True,
     ) -> None:
         super().__init__(
             model=model, loss=loss, data=data, device=device, hooks=hooks, progressbar=progressbar,

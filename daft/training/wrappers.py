@@ -16,6 +16,7 @@ from typing import Optional, Sequence
 
 import torch
 from torch.nn import Module
+from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Dataset
 
 from ..models.base import BaseModel
@@ -108,7 +109,7 @@ class NamedDataLoader(DataLoader):
     """
 
     def __init__(self, dataset: Dataset, *, output_names: Sequence[str], **kwargs) -> None:
-        super().__init__(dataset=dataset, **kwargs)
+        super().__init__(dataset=dataset,  **kwargs)
         self._output_names = output_names
 
     @property

@@ -14,7 +14,8 @@
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
 import torch
 from torch.optim.lr_scheduler import LambdaLR
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import StepLR
 from daft.cli import HeterogeneousModelFactory, create_parser
 from daft.training.hooks import CheckpointSaver, TensorBoardLogger
 from daft.training.train_and_eval import train_and_evaluate
@@ -30,8 +31,9 @@ def main(args=None):
 
     factory.write_args(experiment_dir / "experiment_args.json")
 
-    train_loader, valid_loader, _ = factory.get_data()
+    train_loader, valid_loader, test_loader = factory.get_data()
     discriminator = factory.get_and_init_model()
+    # here assign optimizer given lr value, decay and other variables
     optimizerD = factory.get_optimizer(filter(lambda p: p.requires_grad, discriminator.parameters()))
     loss = factory.get_loss()
 
@@ -51,13 +53,31 @@ def main(args=None):
     )
 
     def lr_factor(epoch):
-        if epoch <= int(0.6 * args.epoch):
+        if epoch <= int(0.6 * args.epoch):################
+            # TODO: maybe changing the lr or even the scheduler here?
+            # there is a plateau in the current model always in the 60 epoch
             return 1
         if epoch <= int(0.9 * args.epoch):
             return 0.1
         return 0.05
 
+    # fixing the scheduler
+    # default
     scheduler = LambdaLR(optimizerD, lr_lambda=lr_factor)
+
+    # cyclic cosine decay learning rate
+    # from scheduler import CyclicCosineDecayLR
+    # scheduler = CyclicCosineDecayLR(optimizerD,
+    #                                init_decay_epochs=10,
+    #                                min_decay_lr=1e-10,
+    #                                restart_interval=5,
+    #                                restart_lr=0.01)
+
+    # scheduler to reduce on plateau
+    #scheduler = ReduceLROnPlateau(optimizerD, 'min', patience=2, cooldown=2, factor=0.1, eps=1e-20)
+
+    # scheduler with stepper
+    #scheduler = StepLR(optimizerD, step_size=10, gamma=0.1)
 
     dev = torch.device("cuda")
     train_and_evaluate(

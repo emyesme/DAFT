@@ -47,6 +47,15 @@ class Metric(metaclass=ABCMeta):
     def lower_is_better(self) -> bool:
         """Whether a lower value indicates better performance"""
 
+        # @abstractmethod
+        # def values_matrix(self) -> Dict[str, np.array]:
+        """ Compute and returns the metrics
+
+        Returns (dict):
+          A Dict mapping a metrics'name to its value
+          in the shape of a matrix or array
+        """
+
     @abstractmethod
     def values(self) -> Dict[str, float]:
         """Computes and returns the metrics.
@@ -157,6 +166,7 @@ class BalancedAccuracy(Metric):
         return False
 
     def values(self) -> Dict[str, float]:
+        print("balanced accuracy ", self._correct, " / ", self._total)
         value = np.mean(self._correct / self._total)
         return {"balanced_accuracy": value}
 
@@ -180,6 +190,62 @@ class BalancedAccuracy(Metric):
         for i, c in zip(classes, counts):
             self._total[i] += c
             self._correct[i] += is_correct[target_tensor == i].sum()
+
+
+class ConfusionMatrix(Metric):
+    ''' Compute confusion matrix
+
+    It show the classification results
+
+    Args:
+      n_classes (int):
+        Number of classes in the dataset.
+      prediction (str):
+        Name of tensor with the predicted value. A tensor of
+        the given name must be returned by the model's forward method.
+      target (str):
+        Name of the tensor witht the  ground truth. A tensor of
+        the given name must be returned by the data loader.
+    '''
+
+    def __init__(self, n_classes: int, prediction: str, target: str) -> None:
+        self._n_classes = max(n_classes, 2)
+        self._prediction = prediction
+        self._target = target
+
+    @property
+    def lower_is_better(self):
+        return False
+
+    def values(self) -> Dict[str, float]:
+        return {"conf_matrix": 0.0}
+
+    def values_matrix(self) -> Dict[str, np.array]:
+        from sklearn.metrics import confusion_matrix
+
+
+        #print(" metrics.py values_matrix self._all_target ", self._all_target)
+        #print(" metrics.py values_matrix self._all_prediction ", self._all_prediction)
+        matrix = confusion_matrix(self._all_target, self._all_prediction)
+
+        return {"conf_matrix": matrix}
+
+    def reset(self) -> None:
+        self._all_target = []
+        self._all_prediction = []
+
+    def update(self, inputs: Dict[str, Tensor], outputs: Dict[str, Tensor]) -> None:
+
+        self._all_target.extend(inputs[self._target].detach().cpu().tolist())
+
+        pred = outputs[self._prediction].detach().cpu()
+        if pred.shape[1] < 2:
+            pred2 = torch.zeros([pred.shape[0], 2])
+            pred2[pred[:, 0] > 0, 1] = 1
+            pred2[pred[:, 0] <= 0, 0] = 1
+            pred = pred2
+        class_id = pred.argmax(dim=1)
+        self._all_prediction.extend(class_id.tolist())
 
 
 class ConcordanceIndex(Metric):

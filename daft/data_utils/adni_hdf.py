@@ -23,15 +23,29 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
+#############################
+
 DIAGNOSIS_CODES_BINARY = {
-    "CN": np.array(0, dtype=np.int64),
-    "Dementia": np.array(1, dtype=np.int64),
+    "CISRR": np.array(0, dtype=np.int64),
+    "SPPP": np.array(1, dtype=np.int64),
 }
+
+
 DIAGNOSIS_CODES_MULTICLASS = {
-    "CN": np.array(0, dtype=np.int64),
-    "MCI": np.array(1, dtype=np.int64),
-    "Dementia": np.array(2, dtype=np.int64),
+    "CIS": np.array(0, dtype=np.int64),
+    "RR": np.array(1, dtype=np.int64),
+    "SP": np.array(2, dtype=np.int64),
+    "PP": np.array(3, dtype=np.int64),
 }
+'''
+
+DIAGNOSIS_CODES_MULTICLASS = {
+    "0EDSS": np.array(0, dtype=np.int64),
+    "1EDSS": np.array(1, dtype=np.int64),
+    "2EDSS": np.array(2, dtype=np.int64),
+}
+'''
+
 PROGRESSION_STATUS = {
     "no": np.array([0], dtype=np.uint8),
     "yes": np.array([1], dtype=np.uint8),
@@ -57,10 +71,31 @@ def AsFloat32(img: np.ndarray) -> np.ndarray:
     return img.astype(np.float32)
 
 
-def MinmaxRescaling(x: np.ndarray) -> np.ndarray:
-    min_val = x.min()
+def fit_normalise(list_values, shape, value):
+    # fit the values in list_values to the shape given so it can be computed with it
+    seq_shape = shape[1] * shape[2] * shape[3]
+    seq1, seq2 = np.repeat(list_values[0], seq_shape), np.repeat(list_values[1], seq_shape)
+    seq1, seq2 = seq1.reshape((shape[1], shape[2], shape[3])), seq2.reshape((shape[1], shape[2], shape[3]))
 
-    return (x - min_val) / (x.max() - min_val)
+    if value:
+        mask = np.ones((shape[1], shape[2], shape[3]), dtype=np.float32)
+    else:
+        mask = np.zeros((shape[1], shape[2], shape[3]), dtype=np.float32)
+
+    fit_values = np.concatenate((mask[np.newaxis, ...], seq1[np.newaxis, ...], seq2[np.newaxis, ...]), axis=0)
+    return fit_values
+
+
+def MinmaxRescaling(x: np.ndarray) -> np.ndarray:
+    # change for the fourth dimension of the image with different mr sequences
+
+    seq1_max, seq1_min = x[1, ...].max(), x[1, ...].min()
+    seq2_max, seq2_min = x[2, ...].max(), x[2, ...].min()
+
+    fit_max = fit_normalise([seq1_max, seq2_max], x.shape, 1)
+    fit_min = fit_normalise([seq1_min, seq2_min], x.shape, 0)
+
+    return (x - fit_min) / (fit_max - fit_min)
 
 
 class Task(enum.Enum):
@@ -112,12 +147,12 @@ class HDF5Dataset(Dataset):
     """
 
     def __init__(
-        self,
-        filename: str,
-        dataset_name: str,
-        target_labels: Sequence[str],
-        transform: Optional[DataTransformFn] = None,
-        target_transform: Optional[Dict[str, TargetTransformFn]] = None,
+            self,
+            filename: str,
+            dataset_name: str,
+            target_labels: Sequence[str],
+            transform: Optional[DataTransformFn] = None,
+            target_transform: Optional[Dict[str, TargetTransformFn]] = None,
     ) -> None:
         self.target_labels = target_labels
         self.transform = transform
@@ -138,8 +173,8 @@ class HDF5Dataset(Dataset):
                     targets[label].append(g.attrs[label])
 
                 data.append(self._get_data(g[roi][dataset_name]))
-
-            meta = self._get_meta_data(hf["stats"][roi][dataset_name])
+            ####################
+            meta = self._get_meta_data(hf["stats"])
 
         self.data = data
         self.targets = targets
@@ -200,15 +235,15 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
     """
 
     def __init__(
-        self,
-        filename: str,
-        dataset_name: str,
-        target_labels: Sequence[str],
-        transform: Optional[DataTransformFn] = None,
-        target_transform: Optional[Dict[str, TargetTransformFn]] = None,
-        tabular_transform: Optional[TargetTransformFn] = None,
-        baseline_only: bool = False,
-        drop_missing: bool = False,
+            self,
+            filename: str,
+            dataset_name: str,
+            target_labels: Sequence[str],
+            transform: Optional[DataTransformFn] = None,
+            target_transform: Optional[Dict[str, TargetTransformFn]] = None,
+            tabular_transform: Optional[TargetTransformFn] = None,
+            baseline_only: bool = False,
+            drop_missing: bool = False,
     ) -> None:
         self.target_labels = target_labels
         self.transform = transform
@@ -255,7 +290,6 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
     # overrides
     def _get_meta_data(self, stats: h5py.Group) -> Dict[str, Any]:
         meta = super()._get_meta_data(stats)
-
         meta["tabular"] = {}
         for key, value in stats.parent.parent["tabular"].items():
             meta["tabular"][key] = value[:]
@@ -284,6 +318,7 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
         img, tabular = self.data[index]
         if self.transform is not None:
             img = self.transform(img)
+            # apply augmentation here?
         if self.tabular_transform is not None:
             tabular = self.tabular_transform(tabular)
 
@@ -298,17 +333,19 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
 
 
 def _get_image_dataset_transform(
-    dtype: np.dtype,
-    rescale: bool,
-    with_mean: Optional[np.ndarray],
-    with_std: Optional[np.ndarray],
-    minmax_rescale: bool = False,
+        dtype: np.dtype,
+        shape: tuple,
+        rescale: bool,
+        with_mean: Optional[np.ndarray],
+        with_std: Optional[np.ndarray],
+        minmax_rescale: bool = False,
 ) -> Callable[[np.ndarray], np.ndarray]:
     img_transforms = []
 
     img_transforms.append(AsFloat32)
 
     if rescale:
+        # TODO: different for each channel
         max_val = np.array(np.iinfo(dtype).max, dtype=np.float32)
         img_transforms.append(transforms.Lambda(lambda x: x / max_val))
 
@@ -318,8 +355,15 @@ def _get_image_dataset_transform(
     if with_mean is not None or with_std is not None:
         if with_mean is None:
             with_mean = np.array(0.0, dtype=np.float32)
+        else:
+            # changing the shape of mean so it can be applied to each channel
+            # the corresponding value
+            with_mean = fit_normalise(with_mean, shape, 0)
         if with_std is None:
             with_std = np.array(1.0, dtype=np.float32)
+        else:
+            with_std = fit_normalise(with_std, shape, 1)
+
         img_transforms.append(transforms.Lambda(lambda x: (x - with_mean) / with_std))
 
     if len(img_transforms) == 0:
@@ -362,13 +406,12 @@ def _transform_tabular(x: np.ndarray, indices: List[NormContainer]) -> np.ndarra
 
 
 def _get_tabular_dataset_transform(
-    transform_age: bool,
-    transform_education: bool,
-    feature_names: np.ndarray,
-    with_mean: Optional[np.ndarray],
-    with_std: Optional[np.ndarray],
+        transform_age: bool,
+        transform_education: bool,
+        feature_names: np.ndarray,
+        with_mean: Optional[np.ndarray],
+        with_std: Optional[np.ndarray],
 ) -> Callable[[np.ndarray], np.ndarray]:
-
     tabular_transforms = []
 
     tabular_transforms.append(AsFloat32)
@@ -395,7 +438,7 @@ def _get_tabular_dataset_transform(
             "AV45": "C(AV45_MISSING)[T.1]",
         }
         for i, el in enumerate(feature_names):
-            if "MISSING" not in el:  # normalize everything but 'MISSING' variables
+            if b"MISSING" not in el:  # normalize everything but 'MISSING' variables
                 as_missing = el in missing_codes and missing_codes[el] in feature_names
                 norms.append(NormContainer(el, i, with_mean[i], with_std[i], as_missing))
         transform_fn = partial(_transform_tabular, indices=norms)
@@ -407,17 +450,17 @@ def _get_tabular_dataset_transform(
 
 
 def get_heterogeneous_dataset_for_train(
-    filename,
-    task,
-    dataset_name,
-    rescale=False,
-    standardize=False,
-    minmax=False,
-    transform_age=False,
-    transform_education=False,
-    normalize_tabular=False,
-    dataset="longitudinal",
-    drop_missing=False,
+        filename,
+        task,
+        dataset_name,
+        rescale=False,
+        standardize=False,
+        minmax=False,
+        transform_age=False,
+        transform_education=False,
+        normalize_tabular=False,
+        dataset="longitudinal",
+        drop_missing=False,
 ):
     """Loads 3D image volumes and tabular data from HDF5 file and converts them to Tensors.
 
@@ -486,6 +529,7 @@ def get_heterogeneous_dataset_for_train(
 
     transform_img_kwargs = {
         "dtype": ds.data[0][0].dtype,
+        "shape": ds.data[0][0].shape,
         "rescale": rescale,
         "minmax_rescale": minmax,
         "with_mean": mean,
@@ -515,7 +559,7 @@ def get_heterogeneous_dataset_for_train(
 
 
 def get_heterogeneous_dataset_for_eval(
-    filename, task, transform_kwargs, dataset_name, transform_tabular_kwargs, drop_missing
+        filename, task, transform_kwargs, dataset_name, transform_tabular_kwargs, drop_missing
 ):
     """Loads 3D image volumes from HDF5 file and converts them to Tensors.
 

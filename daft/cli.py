@@ -32,7 +32,7 @@ from .data_utils.surv_data import cox_collate_fn
 from .models.base import BaseModel
 from .models.losses import CoxphLoss
 from .networks import vol_networks
-from .training.metrics import Accuracy, BalancedAccuracy, ConcordanceIndex, Mean, Metric
+from .training.metrics import Accuracy, BalancedAccuracy, ConfusionMatrix, ConcordanceIndex, Mean, Metric
 from .training.wrappers import LossWrapper, NamedDataLoader
 
 
@@ -58,7 +58,7 @@ def create_parser():
     g = parser.add_argument_group("Architecture")
     g.add_argument(
         "--discriminator_net",
-        choices=["resnet", "concat1fc", "concat2fc", "mlpcatmlp", "duanmu", "film", "daft"],
+        choices=["resnet", "concat1fc", "concat2fc", "mlpcatmlp", "duanmu", "film", "daft", "daft_v2", "daftselu", "nodaft"],
         default="daft",
         help="which architecture to use. Default: %(default)s",
     )
@@ -85,7 +85,7 @@ def create_parser():
     )
     g.add_argument(
         "--activation",
-        choices=["linear", "tanh", "sigmoid"],
+        choices=["linear", "tanh", "sigmoid", "relu"],
         default="linear",
         help="activation in film. Default: %(default)s",
     )
@@ -112,6 +112,14 @@ def create_parser():
         help="Whether training data contains longitudinal data (multiple visits per patient), "
         "or only baseline data (one visit per patient). Default: %(default)s",
     )
+    ###
+    g.add_argument("--input_channels",
+                   type=int,
+                   required=True,
+                   default=1,
+                   help="quantity of channels in the input image ( can be several sequences or mask in the input)",
+    )
+    ###
     g.add_argument(
         "--drop_missing",
         action="store_true",
@@ -302,6 +310,8 @@ class BaseModelFactory(metaclass=ABCMeta):
         else:
             if self.args.num_classes > 2:
                 loss = LossWrapper(
+                    # TODO: Categorical crossentropy loss
+                    # is this categorial?
                     torch.nn.CrossEntropyLoss(), input_names=["logits", "target"], output_names=["cross_entropy"]
                 )
             else:
@@ -329,6 +339,7 @@ class BaseModelFactory(metaclass=ABCMeta):
             metrics = [
                 Accuracy("logits", "target"),
                 BalancedAccuracy(self.args.num_classes, "logits", "target"),
+                ConfusionMatrix(self.args.num_classes, "logits", "target"),
             ]
         return metrics
 
@@ -444,12 +455,15 @@ class HeterogeneousModelFactory(BaseModelFactory):
             "duanmu": vol_networks.InteractiveHNN,
             "film": vol_networks.FilmHNN,
             "daft": vol_networks.DAFT,
+            "daft_v2": vol_networks.DAFT_v2,
+            "daftselu": vol_networks.DAFTSeLU,
+            "nodaft": vol_networks.noDAFT###
         }
         if args.discriminator_net not in class_dict:
             raise ValueError("network {!r} is unsupported".format(args.discriminator_net))
         # common args of all models
         model_args = {
-            "in_channels": 1,
+            "in_channels": args.input_channels,###
             "n_outputs": (args.num_classes if args.num_classes > 2 else 1),
             "n_basefilters": args.n_basefilters,
         }

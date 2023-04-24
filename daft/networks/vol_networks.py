@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 
 from ..models.base import BaseModel
-from .vol_blocks import ConvBnReLU, DAFTBlock, FilmBlock, ResBlock
-
+from .vol_blocks import ConvBnReLU, ConvBnSeLU, DAFTBlock, FilmBlock, ResBlock, ResSeLUBlock, ResDropoutBlock
+from .vol_blocks import ConvBnReLUDropout
 
 class HeterogeneousResNet(BaseModel):
     def __init__(self, in_channels=1, n_outputs=3, bn_momentum=0.1, n_basefilters=4) -> None:
@@ -326,6 +326,97 @@ class FilmHNN(BaseModel):
 
         return {"logits": out}
 
+class DAFTSeLU(BaseModel):
+    def __init__(
+        self,
+        in_channels: int,
+        n_outputs: int,
+        bn_momentum: float = 0.1,
+        n_basefilters: int = 4,
+        filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnSeLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResSeLUBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
+        self.block2 = ResSeLUBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
+        self.block3 = ResSeLUBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+
+        return {"logits": out}
+
+# this version have dropout
+class DAFT_v2(BaseModel):
+    def __init__(
+        self,
+        in_channels: int,
+        n_outputs: int,
+        bn_momentum: float = 0.1,
+        n_basefilters: int = 4,
+        filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.7)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.7)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+
+        return {"logits": out}
+
 
 class DAFT(BaseModel):
     def __init__(
@@ -366,6 +457,51 @@ class DAFT(BaseModel):
         out = self.block2(out)
         out = self.block3(out)
         out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+
+        return {"logits": out}
+
+class noDAFT(BaseModel):
+    def __init__(
+        self,
+        in_channels: int,
+        n_outputs: int,
+        bn_momentum: float = 0.1,
+        n_basefilters: int = 4,
+        filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
+        self.block2 = ResBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
+        self.block3 = ResBlock(2 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
+        #self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        #out = self.blockX(out, tabular)
         out = self.global_pool(out)
         out = out.view(out.size(0), -1)
         out = self.fc(out)
