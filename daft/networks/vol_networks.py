@@ -507,3 +507,49 @@ class noDAFT(BaseModel):
         out = self.fc(out)
 
         return {"logits": out}
+
+
+class Siamese(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        #self.cnn1 = nn.Sequential(
+        #    nn.Conv3d(in_channels, n_basefilters, kernel_size, )
+        #)
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
+        self.block2 = ResBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
+        self.block3 = ResBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+
+        return {"logits": out}

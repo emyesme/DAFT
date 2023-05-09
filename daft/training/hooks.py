@@ -186,9 +186,17 @@ class TensorBoardLogger(Hook):
                     # https://christianbernecker.medium.com/how-to-create-a-confusion-matrix-with-tensorboard-and-pytorch-3344ad5e7209
                     import seaborn as sn
                     import pandas as pd
+                    from ..data_utils.adni_hdf import Constants
 
                     matrix = m.values_matrix()
-                    classes = ["CIS","RR", "SP","PP"]  # when checking the create.hd5 just count and compare
+                    if matrix['conf_matrix'].shape[0] == 2:
+                        classes = Constants.DIAGNOSIS_CODES_BINARY.keys()
+                    elif matrix['conf_matrix'].shape[0] == 3:
+                        classes = Constants.DIAGNOSIS_CODES_MULTICLASS3.keys()
+                    elif matrix['conf_matrix'].shape[0] == 4:
+                        classes = Constants.DIAGNOSIS_CODES_MULTICLASS.keys()
+
+                    # when checking the create.hd5 just count and compare
                     df_cm = pd.DataFrame(matrix["conf_matrix"],
                                          index=[i for i in classes],
                                          columns=[i for i in classes])

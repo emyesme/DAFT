@@ -31,7 +31,7 @@ def main(args=None):
 
     factory.write_args(experiment_dir / "experiment_args.json")
 
-    train_loader, valid_loader, test_loader = factory.get_data()
+    train_loader, valid_loader, _ = factory.get_data()
     discriminator = factory.get_and_init_model()
     # here assign optimizer given lr value, decay and other variables
     optimizerD = factory.get_optimizer(filter(lambda p: p.requires_grad, discriminator.parameters()))
@@ -47,6 +47,7 @@ def main(args=None):
 
     eval_metrics_tb = factory.get_metrics()
     eval_hooks = [TensorBoardLogger(str(tb_log_dir / "eval"), eval_metrics_tb)]
+
     eval_metrics_cp = factory.get_metrics()
     eval_hooks.append(
         CheckpointSaver(discriminator, checkpoints_dir, save_every_n_epochs=1, max_keep=5, metrics=eval_metrics_cp)

@@ -202,7 +202,7 @@ class ModelRunner:
         self._dispatch("on_end_epoch")
 
     def _get_model_inputs_from_batch(self, batch: Dict[str, Tensor]) -> Sequence[Tensor]:
-        # no get rid of unnecessary dimensions when adding multiple channels
+        # to get rid of unnecessary dimensions when adding multiple channels
         batch["image"] = batch["image"].squeeze(0).squeeze(1)
         assert len(batch) >= len(self.model.input_names), "model expects {:d} inputs, but batch has only {:d}".format(
             len(self.model.input_names), len(batch)

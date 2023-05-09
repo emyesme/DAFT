@@ -336,10 +336,11 @@ class BaseModelFactory(metaclass=ABCMeta):
         if self._task == adni_hdf.Task.SURVIVAL_ANALYSIS:
             metrics = [ConcordanceIndex("logits", "event", "time")]
         else:
+            confmatrix = ConfusionMatrix(self.args.num_classes, "logits", "target")
             metrics = [
                 Accuracy("logits", "target"),
                 BalancedAccuracy(self.args.num_classes, "logits", "target"),
-                ConfusionMatrix(self.args.num_classes, "logits", "target"),
+                confmatrix,
             ]
         return metrics
 
@@ -422,8 +423,7 @@ class HeterogeneousModelFactory(BaseModelFactory):
             drop_missing=args.drop_missing,
         )
         self.tabular_size = len(train_data.meta["tabular"]["columns"])
-        trainDataLoader = self._make_named_data_loader(train_data, ["image", "tabular"], is_training=True)
-
+        trainDataLoader = self._make_named_data_loader(train_data, ["image", "tabular"], is_training=False)
         eval_data = adni_hdf.get_heterogeneous_dataset_for_eval(
             args.val_data,
             self._task,

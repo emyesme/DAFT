@@ -16,12 +16,33 @@ import enum
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
-
+import PIL
 import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
+from torchvision.transforms import functional as F
+import random
+
+class Constants:
+    DIAGNOSIS_CODES_BINARY = {
+        "CISRR": np.array(0, dtype=np.int64),
+        "SPPP": np.array(1, dtype=np.int64),
+    }
+
+    DIAGNOSIS_CODES_MULTICLASS = {
+        "CIS": np.array(0, dtype=np.int64),
+        "RR": np.array(1, dtype=np.int64),
+        "SP": np.array(2, dtype=np.int64),
+        "PP": np.array(3, dtype=np.int64),
+    }
+
+    DIAGNOSIS_CODES_MULTICLASS3 = {
+        "0EDSS": np.array(0, dtype=np.int64),
+        "1EDSS": np.array(1, dtype=np.int64),
+        "2EDSS": np.array(2, dtype=np.int64),
+    }
 
 #############################
 
@@ -30,21 +51,20 @@ DIAGNOSIS_CODES_BINARY = {
     "SPPP": np.array(1, dtype=np.int64),
 }
 
-
 DIAGNOSIS_CODES_MULTICLASS = {
     "CIS": np.array(0, dtype=np.int64),
     "RR": np.array(1, dtype=np.int64),
     "SP": np.array(2, dtype=np.int64),
     "PP": np.array(3, dtype=np.int64),
 }
-'''
 
-DIAGNOSIS_CODES_MULTICLASS = {
+
+DIAGNOSIS_CODES_MULTICLASS3 = {
     "0EDSS": np.array(0, dtype=np.int64),
     "1EDSS": np.array(1, dtype=np.int64),
     "2EDSS": np.array(2, dtype=np.int64),
 }
-'''
+
 
 PROGRESSION_STATUS = {
     "no": np.array([0], dtype=np.uint8),
@@ -101,6 +121,7 @@ def MinmaxRescaling(x: np.ndarray) -> np.ndarray:
 class Task(enum.Enum):
     BINARY_CLASSIFICATION = (["DX"], DIAGNOSIS_CODES_BINARY)
     MULTI_CLASSIFICATION = (["DX"], DIAGNOSIS_CODES_MULTICLASS)
+    MULTI_CLASSIFICATION3 = (["Dx"], DIAGNOSIS_CODES_MULTICLASS3)
     SURVIVAL_ANALYSIS = (["event", "time"], PROGRESSION_STATUS)
 
     def __init__(self, target_labels: Sequence[str], target2code: Dict[str, np.ndarray]):
@@ -318,7 +339,6 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
         img, tabular = self.data[index]
         if self.transform is not None:
             img = self.transform(img)
-            # apply augmentation here?
         if self.tabular_transform is not None:
             tabular = self.tabular_transform(tabular)
 
@@ -374,10 +394,71 @@ def _get_image_dataset_transform(
 
     return transforms.Compose(img_transforms)
 
+def gaussian_noise(img: torch.Tensor) -> torch.Tensor:
+
+    out = img
+    # mask
+    channel1 = torch.as_tensor(img.numpy()[0, ...])
+    # flair
+    channel2 = torch.as_tensor(img.numpy()[1, ...])
+    # t1
+    channel3 = torch.as_tensor(img.numpy()[2, ...])
+
+    # https://github.com/pytorch/vision/issues/6192
+    if random.random() < 0.5:
+        factor = 25.
+        channel2 = channel2 + factor * torch.randn_like(channel2)
+
+        channel3 = channel3 + factor * torch.randn_like(channel3)
+
+    out = torch.as_tensor(np.concatenate((channel1[np.newaxis, ...],
+                                          channel2[np.newaxis, ...],
+                                          channel3[np.newaxis, ...]), axis=0))
+
+    return out
+
+def t4f_RandomHorizontalFlip(img: np.ndarray) -> torch.Tensor:
+    # if no transformation change the variable return the same
+    out = img
+    # mask
+    channel1 = img[0, ...]
+    # flair
+    channel2 = img[1, ...]
+    # t1
+    channel3 = img[2, ...]
+
+    # I think I should use it as tensor not image
+    if random.random() < 0.5:
+        #print("adni_hdf aug flip")
+        channel1 = np.transpose(channel1)
+        channel2 = np.transpose(channel2)
+        channel3 = np.transpose(channel3)
+
+    out = torch.as_tensor(np.concatenate((channel1[np.newaxis, ...],
+                                          channel2[np.newaxis, ...],
+                                          channel3[np.newaxis, ...]), axis=0))
+    return out
+
+
+def _get_img_aug_transform(task: Task) -> DataTransformFn:
+    if task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION, Task.MULTI_CLASSIFICATION3}:
+        img_aug_transform = transforms.Compose([
+            transforms.Lambda(t4f_RandomHorizontalFlip),
+            #transforms.RandomAffine(degrees=(-30, 30), translate=(0.01, 0.02), scale=(0.7, 0.02)),
+            transforms.Lambda(gaussian_noise)
+        ]
+        )
+    else:
+        raise ValueError("{!r} task not supported".format(task))
+    return img_aug_transform
+
 
 def _get_target_transform(task: Task) -> TargetTransformFn:
     if task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION}:
-        target_transform = {"DX": transforms.Compose([task.label_transform, AsTensor])}
+        target_transform = {"DX": transforms.Compose(
+            # no augmentation
+            [task.label_transform, AsTensor])}
+
     elif task == Task.SURVIVAL_ANALYSIS:
         target_transform = dict(
             zip(task.labels, (transforms.Compose([task.label_transform, AsTensor]), transforms.Compose([AsTensor])))
@@ -502,11 +583,13 @@ def get_heterogeneous_dataset_for_train(
         If both rescale and standardize are True.
     """
     target_transform = _get_target_transform(task)
+    img_transform = _get_img_aug_transform(task)
 
     ds = HDF5DatasetHeterogeneous(
         filename,
         dataset_name,
         task.labels,
+        transform=img_transform,
         target_transform=target_transform,
         baseline_only=(dataset == "baseline"),
         drop_missing=drop_missing,

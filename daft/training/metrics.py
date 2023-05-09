@@ -218,14 +218,11 @@ class ConfusionMatrix(Metric):
         return False
 
     def values(self) -> Dict[str, float]:
+
         return {"conf_matrix": 0.0}
 
     def values_matrix(self) -> Dict[str, np.array]:
         from sklearn.metrics import confusion_matrix
-
-
-        #print(" metrics.py values_matrix self._all_target ", self._all_target)
-        #print(" metrics.py values_matrix self._all_prediction ", self._all_prediction)
         matrix = confusion_matrix(self._all_target, self._all_prediction)
 
         return {"conf_matrix": matrix}
