@@ -28,6 +28,7 @@ from train import main as main_train
 
 def get_experiment(data_dir: Path,
                    experiment_name: str,
+                   net: str,
                    num_classes: int,
                    train_path: Path,
                    val_path: Path,
@@ -40,7 +41,7 @@ def get_experiment(data_dir: Path,
         "train_data": os.path.join(data_dir, train_path),
         "val_data": os.path.join(data_dir, val_path),
         "test_data": os.path.join(data_dir, test_path),
-        "discriminator_net": "daft_v2",
+        "discriminator_net": net,
         "activation": "tanh",
         "learning_rate": "0.00013",
         "decay_rate": "0.001",
@@ -63,34 +64,76 @@ def get_experiment(data_dir: Path,
 
 
 def main():
-    experiment_name = "mask_flair_t1_folds_manual_good_16batch_2g_aug"
-    print(" ## experiment 2 groups cisrr sppp")
+    '''
+    print(" ## experiment 3 groups edss")
+
+    experiment_name = "11may_3edss_NOaugmentation_manualfile"
+    net = "daft_v2"
     args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
                           experiment_name,
-                          2,
-                          "manual_2g_train_fold1.h5",
-                          "manual_2g_val_fold1.h5",
-                          "manual_2g_test_fold1.h5"
+                          net,
+                          3,
+                          "manualfile_3edss_train_fold1.h5",
+                          "manualfile_3edss_val_fold1.h5",
+                          "manualfile_3edss_test_fold1.h5"
                           )
     main_train(args)
 
     print(" end fold 1")
     args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
                           experiment_name,
-                          2,
-                          "manual_2g_train_fold2.h5",
-                          "manual_2g_val_fold2.h5",
-                          "manual_2g_test_fold2.h5"
+                          net,
+                          3,
+                          "manualfile_3edss_train_fold2.h5",
+                          "manualfile_3edss_val_fold2.h5",
+                          "manualfile_3edss_test_fold2.h5"
                           )
     main_train(args)
 
     print(" end fold 2")
     args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
                           experiment_name,
+                          net,
+                          3,
+                          "manualfile_3edss_train_fold3.h5",
+                          "manualfile_3edss_val_fold3.h5",
+                          "manualfile_3edss_test_fold3.h5"
+                          )
+    main_train(args)
+
+    print("end fold 3")
+
+    experiment_name = "11may_2group_NOaugmentation_manualfile"
+    print(" ## experiment 2 groups cisrr sppp")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
                           2,
-                          "manual2_2g_train_fold3.h5",
-                          "manual2_2g_val_fold3.h5",
-                          "manual2_2g_test_fold3.h5"
+                          "manualfile_2g_train_fold1.h5",
+                          "manualfile_2g_val_fold1.h5",
+                          "manualfile_2g_test_fold1.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 1")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          2,
+                          "manualfile_2g_train_fold2.h5",
+                          "manualfile_2g_val_fold2.h5",
+                          "manualfile_2g_test_fold2.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 2")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          2,
+                          "manualfile_2g_train_fold3.h5",
+                          "manualfile_2g_val_fold3.h5",
+                          "manualfile_2g_test_fold3.h5"
                           )
     main_train(args)
 
@@ -98,37 +141,168 @@ def main():
 
     print(" ## experiment 4 groups cis rr sp pp")
 
-    experiment_name = "mask_flair_t1_folds_manual_good_16batch_4g_aug"
+    experiment_name = "11may_4group_NOaugmentation_manualfile"
     args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
                           experiment_name,
+                          net,
                           4,
-                          "manual_4g_train_fold1.h5",
-                          "manual_4g_val_fold1.h5",
-                          "manual_4g_test_fold1.h5"
+                          "manualfile_4g_train_fold1.h5",
+                          "manualfile_4g_val_fold1.h5",
+                          "manualfile_4g_test_fold1.h5"
                           )
     main_train(args)
 
     print(" end fold 1")
     args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
                           experiment_name,
+                          net,
                           4,
-                          "manual_4g_train_fold2.h5",
-                          "manual_4g_val_fold2.h5",
-                          "manual_4g_test_fold2.h5"
+                          "manualfile_4g_train_fold2.h5",
+                          "manualfile_4g_val_fold2.h5",
+                          "manualfile_4g_test_fold2.h5"
                           )
     main_train(args)
 
     print(" end fold 2")
     args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
                           experiment_name,
+                          net,
                           4,
-                          "manual_4g_train_fold3.h5",
-                          "manual_4g_val_fold3.h5",
-                          "manual_4g_test_fold3.h5"
+                          "manualfile_4g_train_fold3.h5",
+                          "manualfile_4g_val_fold3.h5",
+                          "manualfile_4g_test_fold3.h5"
                           )
     main_train(args)
 
     print("end fold 3")
+
+    print(" ## experiment 3 groups edss no dropout")
+
+    experiment_name = "11may_3edss_NOdropout_NOaugmentation_manualfile"
+    net = "daft"
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          3,
+                          "manualfile_3edss_train_fold1.h5",
+                          "manualfile_3edss_val_fold1.h5",
+                          "manualfile_3edss_test_fold1.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 1")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          3,
+                          "manualfile_3edss_train_fold2.h5",
+                          "manualfile_3edss_val_fold2.h5",
+                          "manualfile_3edss_test_fold2.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 2")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          3,
+                          "manualfile_3edss_train_fold3.h5",
+                          "manualfile_3edss_val_fold3.h5",
+                          "manualfile_3edss_test_fold3.h5"
+                          )
+    main_train(args)
+
+    print("end fold 3")
+
+    experiment_name = "11may_2group_NOdropout_NOaugmentation_manualfile"
+    print(" ## experiment 2 groups cisrr sppp")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          2,
+                          "manualfile_2g_train_fold1.h5",
+                          "manualfile_2g_val_fold1.h5",
+                          "manualfile_2g_test_fold1.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 1")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          2,
+                          "manualfile_2g_train_fold2.h5",
+                          "manualfile_2g_val_fold2.h5",
+                          "manualfile_2g_test_fold2.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 2")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          2,
+                          "manualfile_2g_train_fold3.h5",
+                          "manualfile_2g_val_fold3.h5",
+                          "manualfile_2g_test_fold3.h5"
+                          )
+    main_train(args)
+
+    print("end fold 3")
+
+    print(" ## experiment 4 groups cis rr sp pp")
+
+    experiment_name = "11may_4group_NOdropout_NOaugmentation_manualfile"
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          4,
+                          "manualfile_4g_train_fold1.h5",
+                          "manualfile_4g_val_fold1.h5",
+                          "manualfile_4g_test_fold1.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 1")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          4,
+                          "manualfile_4g_train_fold2.h5",
+                          "manualfile_4g_val_fold2.h5",
+                          "manualfile_4g_test_fold2.h5"
+                          )
+    main_train(args)
+
+    print(" end fold 2")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          4,
+                          "manualfile_4g_train_fold3.h5",
+                          "manualfile_4g_val_fold3.h5",
+                          "manualfile_4g_test_fold3.h5"
+                          )
+    main_train(args)
+
+    print("end fold 3")
+
+    '''
+    experiment_name = "10may_4group_augmentation_manualfile"
+    # missing this with augmentation adni_hdf uncomment img_transform line
+    print(" end fold 2")
+    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+                          experiment_name,
+                          "daft_v2",
+                          4,
+                          "manualfile_4g_train_fold3.h5",
+                          "manualfile_4g_val_fold3.h5",
+                          "manualfile_4g_test_fold3.h5"
+                          )
+    main_train(args)
+
+    print("end fold 3")
+    
 
 
 if __name__ == "__main__":

@@ -121,7 +121,7 @@ def MinmaxRescaling(x: np.ndarray) -> np.ndarray:
 class Task(enum.Enum):
     BINARY_CLASSIFICATION = (["DX"], DIAGNOSIS_CODES_BINARY)
     MULTI_CLASSIFICATION = (["DX"], DIAGNOSIS_CODES_MULTICLASS)
-    MULTI_CLASSIFICATION3 = (["Dx"], DIAGNOSIS_CODES_MULTICLASS3)
+    MULTI_CLASSIFICATION3 = (["DX"], DIAGNOSIS_CODES_MULTICLASS3)
     SURVIVAL_ANALYSIS = (["event", "time"], PROGRESSION_STATUS)
 
     def __init__(self, target_labels: Sequence[str], target2code: Dict[str, np.ndarray]):
@@ -454,7 +454,7 @@ def _get_img_aug_transform(task: Task) -> DataTransformFn:
 
 
 def _get_target_transform(task: Task) -> TargetTransformFn:
-    if task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION}:
+    if task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION, Task.MULTI_CLASSIFICATION3}:
         target_transform = {"DX": transforms.Compose(
             # no augmentation
             [task.label_transform, AsTensor])}
@@ -583,13 +583,14 @@ def get_heterogeneous_dataset_for_train(
         If both rescale and standardize are True.
     """
     target_transform = _get_target_transform(task)
-    img_transform = _get_img_aug_transform(task)
+    #img_transform = _get_img_aug_transform(task)
+
 
     ds = HDF5DatasetHeterogeneous(
         filename,
         dataset_name,
         task.labels,
-        transform=img_transform,
+        #transform=img_transform,
         target_transform=target_transform,
         baseline_only=(dataset == "baseline"),
         drop_missing=drop_missing,

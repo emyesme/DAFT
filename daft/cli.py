@@ -183,7 +183,9 @@ class BaseModelFactory(metaclass=ABCMeta):
                     "Data for classification tasks should consist of more than one label:"
                     f" num_classes = {arguments.num_classes}."
                 )
-            if arguments.num_classes > 2:
+            if arguments.num_classes == 3:
+                self._task = adni_hdf.Task.MULTI_CLASSIFICATION3
+            elif arguments.num_classes > 3:
                 self._task = adni_hdf.Task.MULTI_CLASSIFICATION
             else:
                 self._task = adni_hdf.Task.BINARY_CLASSIFICATION

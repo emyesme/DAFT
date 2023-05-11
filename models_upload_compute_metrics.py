@@ -11,41 +11,27 @@ from daft.cli import HeterogeneousModelFactory, create_parser
 from daft.testing.test_and_save import ModelTester
 from daft.training.metrics import Metric
 
-def get_experiment(data_dir: Path) -> Dict[str, Any]:
-    cfg = {
-        "epoch": "200",
-        "batchsize": "8",
-        "optimizer": "AdamW",
-        "workers": "2",
-        "train_data": os.path.join(data_dir, "manual2_2g_train_fold1.h5"),
-        "val_data":  os.path.join(data_dir, "manual2_2g_test_fold1.h5"),
-        "test_data":  os.path.join(data_dir, "manual2_2g_val_fold1.h5"),
-        "discriminator_net": "daft",
-        "activation": "tanh",
-        "learning_rate": "0.00013",
-        "decay_rate": "0.001",
-        "experiment_name": "mask_flair_t1_folds_manual_good_nodropout",
-        "num_classes": "4",
-        "input_channels": "3",
-        "n_basefilters": "4",
-        "bottleneck_factor": "7",
-        "normalize_image": "minmax",
-        "dataset": "longitudinal",
-        "task": "clf",
-
-    }
-    cmd = []
-    for k, v in cfg.items():
-        cmd.append(f"--{k}")
-        cmd.append(v)
-
-    return cmd
-
 def load_model(
-    checkpoints_dir: Path
+    checkpoints_dir: Path,
+    data_dir: str,
+    experiment_name: str,
+    net: str,
+    classes: int,
+    train_data: str,
+    val_data: str,
+    test_data: str
 ) -> torch.nn.Module:
 
-    args = get_experiment("/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir")
+    from ablation_adni_classification_try import get_experiment
+
+    args = get_experiment(data_dir,
+                          experiment_name,
+                          net,
+                          classes,
+                          train_data,
+                          val_data,
+                          test_data)
+
     args = create_parser().parse_args(args=args)
 
     factory = HeterogeneousModelFactory(args)
@@ -96,20 +82,22 @@ def evaluate_model(*, metrics: Sequence[Metric], **kwargs) -> Tuple[Dict[str, fl
 
 def main():
     # fold 1 no augmentation
-    '''
+    experiments_dir = "/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/experiments_clf"
     factory, model, test_loader = load_model(
-        "/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/experiments_clf/mask_flair_t1_folds_manual2/2023-04-28_15-24/checkpoints")
+        os.path.join(experiments_dir, "10may_4group_augmentation_manualfile/2023-05-10_21-05/checkpoints"),
+        "/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
+        "it doesnt affect",
+        "daft_v2",
+        4,
+        "manualfile_4g_train_fold2.h5",
+        "manualfile_4g_val_fold2.h5",
+        "manualfile_4g_test_fold2.h5"
+    )
     metrics, preds = evaluate_model(
         metrics=factory.get_test_metrics(), model=model, data=test_loader, progressbar=True,
     )
-    '''
-    # fold 2 no augmentation
-    factory, model, test_loader = load_model(
-        "/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/experiments_clf/mask_flair_t1_folds_manual_good_nodropout/2023-05-04_10-41/checkpoints")
-    metrics, preds = evaluate_model(
-        metrics=factory.get_test_metrics(), model=model, data=test_loader, progressbar=True,
-    )
-    print(metrics)
+    print("metrics fold1", metrics )
+
 
 
 

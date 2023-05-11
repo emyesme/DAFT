@@ -182,7 +182,7 @@ def load_best_model(
     Returns:
         torch.nn.Module: The model with weights restored from the `best' checkpoint.
     """
-    if factory.task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION}:
+    if factory.task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION, Task.MULTI_CLASSIFICATION3}:
         metric = "balanced_accuracy"
     elif factory.task == Task.SURVIVAL_ANALYSIS:
         metric = "concordance_cindex"
