@@ -4,12 +4,19 @@ import importlib
 
 import os
 import torch
+import pandas as pd
+import seaborn as sn
 from pathlib import Path
 from torch import Tensor
-from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
-from daft.cli import HeterogeneousModelFactory, create_parser
-from daft.testing.test_and_save import ModelTester
+from matplotlib import pyplot as plt
 from daft.training.metrics import Metric
+from daft.data_utils.adni_hdf import Constants
+from daft.testing.test_and_save import ModelTester
+from daft.cli import HeterogeneousModelFactory, create_parser
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
+
+
+
 
 def load_model(
     checkpoints_dir: Path,
@@ -71,10 +78,16 @@ def evaluate_model(*, metrics: Sequence[Metric], **kwargs) -> Tuple[Dict[str, fl
     predictions, unconsumed_inputs = tester.predict_all()
 
     metrics_dict = {}
-    for m in metrics:
-        m.reset()
-        m.update(inputs=unconsumed_inputs, outputs=predictions)
-        metrics_dict.update(m.values())
+    for i, m in enumerate(metrics):
+        if i == (len(metrics)-1):
+            print("last metric")
+            m.reset()
+            m.update(inputs=unconsumed_inputs, outputs=predictions)
+            metrics_dict.update(m.values_matrix())
+        else:
+            m.reset()
+            m.update(inputs=unconsumed_inputs, outputs=predictions)
+            metrics_dict.update(m.values())
 
     predictions.update(unconsumed_inputs)
     return metrics_dict, predictions
@@ -96,8 +109,25 @@ def main():
     metrics, preds = evaluate_model(
         metrics=factory.get_test_metrics(), model=model, data=test_loader, progressbar=True,
     )
-    print("metrics fold1", metrics )
 
+    # draw confusion matrix of test set
+    matrix = metrics["conf_matrix"]
+
+    if matrix.shape[0] == 2:
+        classes = Constants.DIAGNOSIS_CODES_BINARY.keys()
+    elif matrix.shape[0] == 3:
+        classes = Constants.DIAGNOSIS_CODES_MULTICLASS3.keys()
+    elif matrix.shape[0] == 4:
+        classes = Constants.DIAGNOSIS_CODES_MULTICLASS.keys()
+
+    # when checking the create.hd5 just count and compare
+    df_cm = pd.DataFrame(matrix,
+                         index=[i for i in classes],
+                         columns=[i for i in classes])
+    plt.figure(figsize=(12, 7))
+    fig_conf_matrix = sn.heatmap(df_cm, annot=True).get_figure()
+    fig_conf_matrix.savefig("confmatrix_4g_aug_test.png")
+    print("metrics fold3", metrics)
 
 
 
