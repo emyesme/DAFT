@@ -58,8 +58,8 @@ def create_parser():
     g = parser.add_argument_group("Architecture")
     g.add_argument(
         "--discriminator_net",
-        choices=["resnet", "concat1fc", "concat2fc", "mlpcatmlp", "duanmu", "film", "daft", "daft_v2", "daftselu", "nodaft"],
-        default="daft",
+        choices=["resnet", "siamese"],
+        default="siamese",
         help="which architecture to use. Default: %(default)s",
     )
     g.add_argument("--n_basefilters", type=int, default=4, help="Number of base filters. Default: %(default)s")
@@ -451,15 +451,7 @@ class HeterogeneousModelFactory(BaseModelFactory):
         args = self.args
         class_dict = {
             "resnet": vol_networks.HeterogeneousResNet,
-            "concat1fc": vol_networks.ConcatHNN1FC,
-            "concat2fc": vol_networks.ConcatHNN2FC,
-            "mlpcatmlp": vol_networks.ConcatHNNMCM,
-            "duanmu": vol_networks.InteractiveHNN,
-            "film": vol_networks.FilmHNN,
-            "daft": vol_networks.DAFT,
-            "daft_v2": vol_networks.DAFT_v2,
-            "daftselu": vol_networks.DAFTSeLU,
-            "nodaft": vol_networks.noDAFT###
+            "siamese": vol_networks.Siamese
         }
         if args.discriminator_net not in class_dict:
             raise ValueError("network {!r} is unsupported".format(args.discriminator_net))

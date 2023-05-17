@@ -170,17 +170,21 @@ class ModelRunner:
         if not isinstance(batch, (list, tuple)):
             batch = tuple(batch, )
 
-        assert len(self.data.output_names) == len(
-            batch
-        ), "output_names suggests {:d} tensors, but only found {:d} outputs".format(
-            len(self.data.output_names), len(batch)
-        )
-
+        assert len(self.data.output_names) == len(batch), "output_names suggests {:d} tensors, but only found {:d} " \
+                                                          "outputs".format(len(self.data.output_names), len(batch))
+        import numpy as np
         batch = dict(zip(self.data.output_names, batch))
-
+        #print(" _batch_to_device batch keys ", batch.keys())
         if self.device is not None:
             for k, v in batch.items():
-                batch[k] = v.to(self.device)
+                #print(" _batch_to_device key ", k)
+                #print(" _batch_to_device v 0", np.array(v, dtype=object)[0].shape)  # (2,) 8 images ( when batch 8)
+                #print(" _batch_to_device v 1", np.array(v, dtype=object)[1].shape)  # 8 tabular
+
+                if k in ["image", "tabular"]:
+                    batch[k] = [v[0].to(self.device), v[1].to(self.device)]
+                else:
+                    batch[k] = v.to(self.device)
 
         return batch
 
@@ -191,9 +195,12 @@ class ModelRunner:
         """Execute model for every batch."""
         self._set_model_state()
         self._dispatch("on_begin_epoch")
-
+        #print(" train and eval data len ", len(self.data))
         pbar = tqdm(self.data, total=len(self.data), disable=not self.progressbar)
+        import numpy as np
+        #print("train and eval data ", np.array(self.data, dtype=object).shape)
         for batch in pbar:
+            #print("train and eval run batch shape ", np.array(batch, dtype=object).shape)
             batch = self._batch_to_device(batch)
             self._dispatch("before_step", batch)
             self.outputs = self._step(batch)  # to track outputs for schedulers that follow the metric
@@ -203,7 +210,12 @@ class ModelRunner:
 
     def _get_model_inputs_from_batch(self, batch: Dict[str, Tensor]) -> Sequence[Tensor]:
         # to get rid of unnecessary dimensions when adding multiple channels
-        batch["image"] = batch["image"].squeeze(0).squeeze(1)
+        import numpy as np
+        #print("train and eval _get_model_inputs_from_batch ", np.array(batch["image"], dtype=object).shape)
+        ####################################################con
+        #print("train and eval _get_model_inputs_from_batch ", batch["image"][0].shape)
+        batch["image"][0] = batch["image"][0].squeeze(1)
+        batch["image"][1] = batch["image"][1].squeeze(1)
         assert len(batch) >= len(self.model.input_names), "model expects {:d} inputs, but batch has only {:d}".format(
             len(self.model.input_names), len(batch)
         )

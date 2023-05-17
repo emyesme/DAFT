@@ -35,7 +35,7 @@ def get_experiment(data_dir: Path,
                    test_path: Path) -> Dict[str, Any]:
     cfg = {
         "epoch": "150",
-        "batchsize": "16",
+        "batchsize": "8",
         "optimizer": "AdamW",
         "workers": "2",
         "train_data": os.path.join(data_dir, train_path),
@@ -288,6 +288,7 @@ def main():
     print("end fold 3")
 
     '''
+    '''
     experiment_name = "10may_4group_augmentation_manualfile"
     # missing this with augmentation adni_hdf uncomment img_transform line
     print(" end fold 2")
@@ -302,7 +303,19 @@ def main():
     main_train(args)
 
     print("end fold 3")
-    
+    '''
+
+    experiment_name = "4groups_siamese_manualfile"
+    net = "siamese"
+    args = get_experiment("/home/ecarvajal /Desktop/DAFT_branch/DAFT/data_dir",
+                          experiment_name,
+                          net,
+                          4,
+                          "manualfile_4g_2tps_train_fold1.h5",
+                          "manualfile_4g_2tps_val_fold1.h5",
+                          "manualfile_4g_2tps_test_fold1.h5"
+                          )
+    main_train(args)
 
 
 if __name__ == "__main__":

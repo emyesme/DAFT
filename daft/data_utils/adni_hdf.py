@@ -25,6 +25,7 @@ from torchvision import transforms
 from torchvision.transforms import functional as F
 import random
 
+
 class Constants:
     DIAGNOSIS_CODES_BINARY = {
         "CISRR": np.array(0, dtype=np.int64),
@@ -44,6 +45,7 @@ class Constants:
         "2EDSS": np.array(2, dtype=np.int64),
     }
 
+
 #############################
 
 DIAGNOSIS_CODES_BINARY = {
@@ -58,13 +60,11 @@ DIAGNOSIS_CODES_MULTICLASS = {
     "PP": np.array(3, dtype=np.int64),
 }
 
-
 DIAGNOSIS_CODES_MULTICLASS3 = {
     "0EDSS": np.array(0, dtype=np.int64),
     "1EDSS": np.array(1, dtype=np.int64),
     "2EDSS": np.array(2, dtype=np.int64),
 }
-
 
 PROGRESSION_STATUS = {
     "no": np.array([0], dtype=np.uint8),
@@ -188,12 +188,17 @@ class HDF5Dataset(Dataset):
             for image_uid, g in hf.items():
                 if image_uid == "stats":
                     continue
-                visits.append((g.attrs["RID"], g.attrs["VISCODE"]))
+
+                visits.append(
+                    [(g['tp0'][roi].attrs["RID"], g['tp1'][roi].attrs["RID"]),
+                     (g['tp0'][roi].attrs["VISCODE"], g['tp1'][roi].attrs["VISCODE"])])
 
                 for label in self.target_labels:
-                    targets[label].append(g.attrs[label])
+                    targets[label].append(g['tp1'][roi].attrs[label])
 
-                data.append(self._get_data(g[roi][dataset_name]))
+                data.append([self._get_data(g['tp0'][roi][dataset_name]),
+                             self._get_data(g['tp1'][roi][dataset_name])])
+
             ####################
             meta = self._get_meta_data(hf["stats"])
 
@@ -219,11 +224,14 @@ class HDF5Dataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index: int) -> Sequence[np.ndarray]:
-        img = self.data[index]
-        if self.transform is not None:
-            img = self.transform(img)
+        img0 = self.data[index][0]  # tp0
+        img1 = self.data[index][1]  # tp1
 
-        data_point = [img]
+        if self.transform is not None:
+            img0 = self.transform(img0)
+            img1 = self.transform(img1)
+
+        data_point = [img0, img1]  # [tp0, tp1]
         for label in self.target_labels:
             target = self.targets[label][index]
             if self.target_transform is not None:
@@ -288,12 +296,20 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
                     continue
                 if self.baseline_only and g.attrs["VISCODE"] != "bl":
                     continue
-                visits.append((g.attrs["RID"], g.attrs["VISCODE"]))
+                    ########################################################
+                    #######################################################
+                visits.append(
+                    [(g['tp0'][roi].attrs["RID"],
+                      g['tp0'][roi].attrs["VISCODE"]),
+                     (g['tp1'][roi].attrs["RID"],
+                      g['tp1'][roi].attrs["VISCODE"])
+                     ])
 
                 for label in self.target_labels:
-                    targets[label].append(g.attrs[label])
+                    targets[label].append(g['tp1'][roi].attrs[label])
 
-                data.append(self._get_data(g[roi][dataset_name]))
+                data.append([self._get_data(g['tp0'][roi][dataset_name]),
+                             self._get_data(g['tp1'][roi][dataset_name])])
 
             meta = self._get_meta_data(hf["stats"][roi][dataset_name])
 
@@ -305,7 +321,7 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
     # overrides
     def _get_data(self, data: Union[h5py.Dataset, h5py.Group]) -> Any:
         img = super()._get_data(data)
-        tabular = super()._get_data(data.parent.parent["tabular"])
+        tabular = super()._get_data(data.parent["tabular"])
         return img, tabular
 
     # overrides
@@ -336,13 +352,16 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
 
     # overrides
     def __getitem__(self, index: int) -> Sequence[np.ndarray]:
-        img, tabular = self.data[index]
+        img0, tabular0 = self.data[index][0]
+        img1, tabular1 = self.data[index][1]
         if self.transform is not None:
-            img = self.transform(img)
+            img0 = self.transform(img0)
+            img1 = self.transform(img1)
         if self.tabular_transform is not None:
-            tabular = self.tabular_transform(tabular)
+            tabular0 = self.tabular_transform(tabular0)
+            tabular1 = self.tabular_transform(tabular1)
 
-        data_point = [img, tabular]
+        data_point = [[img0, img1], [tabular0, tabular1]]
         for label in self.target_labels:
             target = self.targets[label][index]
             if self.target_transform is not None:
@@ -395,7 +414,6 @@ def _get_image_dataset_transform(
     return transforms.Compose(img_transforms)
 
 def gaussian_noise(img: torch.Tensor) -> torch.Tensor:
-
     out = img
     # mask
     channel1 = torch.as_tensor(img.numpy()[0, ...])
@@ -417,6 +435,7 @@ def gaussian_noise(img: torch.Tensor) -> torch.Tensor:
 
     return out
 
+
 def t4f_RandomHorizontalFlip(img: np.ndarray) -> torch.Tensor:
     # if no transformation change the variable return the same
     out = img
@@ -429,7 +448,7 @@ def t4f_RandomHorizontalFlip(img: np.ndarray) -> torch.Tensor:
 
     # I think I should use it as tensor not image
     if random.random() < 0.5:
-        #print("adni_hdf aug flip")
+        # print("adni_hdf aug flip")
         channel1 = np.transpose(channel1)
         channel2 = np.transpose(channel2)
         channel3 = np.transpose(channel3)
@@ -444,7 +463,7 @@ def _get_img_aug_transform(task: Task) -> DataTransformFn:
     if task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION, Task.MULTI_CLASSIFICATION3}:
         img_aug_transform = transforms.Compose([
             transforms.Lambda(t4f_RandomHorizontalFlip),
-            #transforms.RandomAffine(degrees=(-30, 30), translate=(0.01, 0.02), scale=(0.7, 0.02)),
+            # transforms.RandomAffine(degrees=(-30, 30), translate=(0.01, 0.02), scale=(0.7, 0.02)),
             transforms.Lambda(gaussian_noise)
         ]
         )
@@ -583,14 +602,13 @@ def get_heterogeneous_dataset_for_train(
         If both rescale and standardize are True.
     """
     target_transform = _get_target_transform(task)
-    #img_transform = _get_img_aug_transform(task)
-
+    # img_transform = _get_img_aug_transform(task)
 
     ds = HDF5DatasetHeterogeneous(
         filename,
         dataset_name,
         task.labels,
-        #transform=img_transform,
+        # transform=img_transform,
         target_transform=target_transform,
         baseline_only=(dataset == "baseline"),
         drop_missing=drop_missing,
@@ -610,10 +628,17 @@ def get_heterogeneous_dataset_for_train(
     else:
         mean = None
         std = None
-
+    '''
+    print("dtype shape data all", np.array(ds.data, dtype=object).shape)
+    print("dtype shape data 000", np.array(ds.data, dtype=object)[0][0][0].shape) # image
+    print("dtype shape data 001", np.array(ds.data, dtype=object)[0][0][1].shape)
+    print("dtype shape data 010", np.array(ds.data, dtype=object)[0][1][0].shape)  # image
+    print("dtype shape data 011", np.array(ds.data, dtype=object)[0][1][1].shape)
+    print("dtype shape data ", np.array(ds.data, dtype=object)[0][0][0].dtype)
+    '''
     transform_img_kwargs = {
-        "dtype": ds.data[0][0].dtype,
-        "shape": ds.data[0][0].shape,
+        "dtype": ds.data[0][0][0].dtype,
+        "shape": ds.data[0][0][0].shape,
         "rescale": rescale,
         "minmax_rescale": minmax,
         "with_mean": mean,
