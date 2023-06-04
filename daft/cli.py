@@ -58,7 +58,7 @@ def create_parser():
     g = parser.add_argument_group("Architecture")
     g.add_argument(
         "--discriminator_net",
-        choices=["resnet", "siamese"],
+        choices=["resnet", "siamese", "siamese_leakyrelu"],
         default="siamese",
         help="which architecture to use. Default: %(default)s",
     )
@@ -85,7 +85,7 @@ def create_parser():
     )
     g.add_argument(
         "--activation",
-        choices=["linear", "tanh", "sigmoid", "relu"],
+        choices=["linear", "tanh", "sigmoid", "relu", "leakyrelu"],
         default="linear",
         help="activation in film. Default: %(default)s",
     )
@@ -451,7 +451,8 @@ class HeterogeneousModelFactory(BaseModelFactory):
         args = self.args
         class_dict = {
             "resnet": vol_networks.HeterogeneousResNet,
-            "siamese": vol_networks.Siamese
+            "siamese": vol_networks.Siamese,
+            "siamese_leakyrelu": vol_networks.Siamese_leakyrelu,
         }
         if args.discriminator_net not in class_dict:
             raise ValueError("network {!r} is unsupported".format(args.discriminator_net))

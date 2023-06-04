@@ -28,8 +28,8 @@ import random
 
 class Constants:
     DIAGNOSIS_CODES_BINARY = {
-        "CISRR": np.array(0, dtype=np.int64),
-        "SPPP": np.array(1, dtype=np.int64),
+        "0": np.array(0, dtype=np.int64),
+        "1": np.array(1, dtype=np.int64),
     }
 
     DIAGNOSIS_CODES_MULTICLASS = {
@@ -47,10 +47,16 @@ class Constants:
 
 
 #############################
-
+'''
 DIAGNOSIS_CODES_BINARY = {
     "CISRR": np.array(0, dtype=np.int64),
     "SPPP": np.array(1, dtype=np.int64),
+}
+'''
+
+DIAGNOSIS_CODES_BINARY = {
+    "0": np.array(0, dtype=np.int64),
+    "1": np.array(1, dtype=np.int64),
 }
 
 DIAGNOSIS_CODES_MULTICLASS = {
@@ -105,6 +111,8 @@ def fit_normalise(list_values, shape, value):
     fit_values = np.concatenate((mask[np.newaxis, ...], seq1[np.newaxis, ...], seq2[np.newaxis, ...]), axis=0)
     return fit_values
 
+def MinmaxRescalingOne(x: np.ndarray) -> np.ndarray:
+    return (x - x.min()) / (x.max() - x.min())
 
 def MinmaxRescaling(x: np.ndarray) -> np.ndarray:
     # change for the fourth dimension of the image with different mr sequences
@@ -365,6 +373,7 @@ class HDF5DatasetHeterogeneous(HDF5Dataset):
         for label in self.target_labels:
             target = self.targets[label][index]
             if self.target_transform is not None:
+                #print(" adni hdf get item target_transform ", label, ' ', target)
                 target = self.target_transform[label](target)
             data_point.append(target)
 
@@ -389,7 +398,11 @@ def _get_image_dataset_transform(
         img_transforms.append(transforms.Lambda(lambda x: x / max_val))
 
     if minmax_rescale:
-        img_transforms.append(MinmaxRescaling)
+        #print(" adni hdf min max rescaling shape input ", len(shape))
+        if len(shape) == 3:
+            img_transforms.append(MinmaxRescalingOne)
+        else:
+            img_transforms.append(MinmaxRescaling)
 
     if with_mean is not None or with_std is not None:
         if with_mean is None:
@@ -602,13 +615,13 @@ def get_heterogeneous_dataset_for_train(
         If both rescale and standardize are True.
     """
     target_transform = _get_target_transform(task)
-    # img_transform = _get_img_aug_transform(task)
+    #img_transform = _get_img_aug_transform(task)
 
     ds = HDF5DatasetHeterogeneous(
         filename,
         dataset_name,
         task.labels,
-        # transform=img_transform,
+        #transform=img_transform,
         target_transform=target_transform,
         baseline_only=(dataset == "baseline"),
         drop_missing=drop_missing,

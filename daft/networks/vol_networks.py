@@ -21,6 +21,7 @@ import torch.nn as nn
 from ..models.base import BaseModel
 from .vol_blocks import ConvBnReLU, ConvBnSeLU, DAFTBlock, FilmBlock, ResBlock, ResSeLUBlock, ResDropoutBlock
 from .vol_blocks import ConvBnReLUDropout
+from .vol_blocks import ConvBnLeakyReLUDropout, ResDropoutLeakyBlock
 
 class HeterogeneousResNet(BaseModel):
     def __init__(self, in_channels=1, n_outputs=3, bn_momentum=0.1, n_basefilters=4) -> None:
@@ -524,41 +525,19 @@ class Siamese(BaseModel):
             filmblock_args = {}
 
         self.split_size = 4 * n_basefilters
-        self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
-        self.block1 = ResBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
-        self.block2 = ResBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
-        self.block3 = ResBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 8
         self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
         self.global_pool = nn.AdaptiveAvgPool3d(1)
-        '''
-        kernel_size = 3
-        stride = 1
-        padding = 1
-        
-        self.cnn1 = nn.Sequential(
-            nn.Conv3d(in_channels, n_basefilters, kernel_size, stride=stride, padding=padding, bias=False),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm3d(n_basefilters, momentum=bn_momentum),
-
-            nn.Conv3d(4 * in_channels, 2 * n_basefilters , kernel_size, stride=stride, padding=padding, bias=False),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm3d(2 * n_basefilters, momentum=bn_momentum),
-
-            nn.Conv3d(8 * in_channels, 2 * n_basefilters, kernel_size, stride=stride, padding=padding, bias=False),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm3d(2 * n_basefilters, momentum=bn_momentum),
-        )
-        '''
 
         self.fc1 = nn.Sequential(
             nn.Linear(8 * n_basefilters, 4 * n_basefilters),
             nn.ReLU(inplace=True),
 
-            nn.Linear(4 * n_basefilters, 2 * n_basefilters),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(2 * n_basefilters, n_basefilters),
+            nn.Linear(4 * n_basefilters, n_basefilters),
             nn.ReLU(inplace=True),
 
             nn.Linear(n_basefilters, n_outputs)
@@ -587,12 +566,84 @@ class Siamese(BaseModel):
         out1 = self.forward_once(image[0], tabular[0])
         out2 = self.forward_once(image[1], tabular[1])
 
-        out1 = out1.view(out1.size()[0], -1)
-        out2 = out2.view(out2.size()[0], -1)
+        out = abs(out1 - out2)
+
+        #out1 = out1.view(out1.size()[0], -1)
+        out = out.view(out.size()[0], -1)
 
         #TODO: contrastive loss here
-        out = out1 - out2
+        #out = out1 - out2
 
         out = self.fc1(out)
 
         return {"logits": out}
+
+
+class Siamese_leakyrelu(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnLeakyReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutLeakyBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
+        self.block2 = ResDropoutLeakyBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 16
+        self.block3 = ResDropoutLeakyBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+
+        self.fc1 = nn.Sequential(
+            nn.Linear(8 * n_basefilters, 4 * n_basefilters),
+            nn.LeakyReLU(inplace=True),
+
+            nn.Linear(4 * n_basefilters, n_basefilters),
+            nn.LeakyReLU(inplace=True),
+
+            nn.Linear(n_basefilters, n_outputs)
+        )
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward_once(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)#######
+
+        return out
+
+    def forward(self, image, tabular):
+        out1 = self.forward_once(image[0], tabular[0])
+        out2 = self.forward_once(image[1], tabular[1])
+
+        out = abs(out1 - out2)
+
+        #out1 = out1.view(out1.size()[0], -1)
+        out = out.view(out.size()[0], -1)
+
+        #TODO: contrastive loss here
+        #out = out1 - out2
+
+        out = self.fc1(out)
+
+        return {"logits": out}
+

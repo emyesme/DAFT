@@ -64,6 +64,27 @@ class ConvBnReLUDropout(nn.Module):
         return out
 
 
+
+class ConvBnLeakyReLUDropout(nn.Module):
+    def __init__(
+        self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1, dropout_p=0.5
+    ):
+        super().__init__()
+        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=False)
+        self.bn = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.relu = nn.LeakyReLU(inplace=True)
+        ###
+        self.dropout = nn.Dropout3d(p=dropout_p)
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+        return out
+
+
 class ConvBnSeLU(nn.Module):
     def __init__(
         self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1,
@@ -155,6 +176,49 @@ class ResDropoutBlock(nn.Module):
         out = self.dropout(out)
 
         return out
+
+
+class ResDropoutLeakyBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, bn_momentum=0.05, stride=1, dropout_p=0.5):
+        super().__init__()
+        self.conv1 = conv3d(in_channels, out_channels, stride=stride)
+        self.bn1 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.dropout = nn.Dropout3d(p=dropout_p)
+        self.conv2 = conv3d(out_channels, out_channels)
+        self.bn2 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.relu = nn.LeakyReLU(inplace=True)
+
+        if stride != 1 or in_channels != out_channels:
+            self.downsample = nn.Sequential(
+                conv3d(in_channels, out_channels, kernel_size=1, stride=stride),
+                nn.BatchNorm3d(out_channels, momentum=bn_momentum),
+            )
+        else:
+            self.downsample = None
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+
+        return out
+
 
 
 class ResSeLUBlock(nn.Module):

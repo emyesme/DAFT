@@ -197,10 +197,7 @@ class ModelRunner:
         self._dispatch("on_begin_epoch")
         #print(" train and eval data len ", len(self.data))
         pbar = tqdm(self.data, total=len(self.data), disable=not self.progressbar)
-        import numpy as np
-        #print("train and eval data ", np.array(self.data, dtype=object).shape)
         for batch in pbar:
-            #print("train and eval run batch shape ", np.array(batch, dtype=object).shape)
             batch = self._batch_to_device(batch)
             self._dispatch("before_step", batch)
             self.outputs = self._step(batch)  # to track outputs for schedulers that follow the metric
@@ -214,8 +211,8 @@ class ModelRunner:
         #print("train and eval _get_model_inputs_from_batch ", np.array(batch["image"], dtype=object).shape)
         ####################################################con
         #print("train and eval _get_model_inputs_from_batch ", batch["image"][0].shape)
-        batch["image"][0] = batch["image"][0].squeeze(1)
-        batch["image"][1] = batch["image"][1].squeeze(1)
+        batch["image"][0] = batch["image"][0]#.squeeze(1)
+        batch["image"][1] = batch["image"][1]#.squeeze(1)
         assert len(batch) >= len(self.model.input_names), "model expects {:d} inputs, but batch has only {:d}".format(
             len(self.model.input_names), len(batch)
         )
