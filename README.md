@@ -1,3 +1,28 @@
+# About modifications in this Repository
+
+This modifications are made to follow the work of my master thesis title "Classification of Multiple Sclerosis Using Brain MRI and Clinical Data"
+
+In the branches of this repository you will find some variations to the DAFT approach
+
+ - `branch_emily`: contains the modifications on the DAFT reposiotry with networks such as
+    - `daft_v2` the network receives a 4-dimensional input of binary lesion masks, FLAIR and T1 volumes, registered and belonging to the same patient
+                additionally it has dropout layers, early stopping, .
+    - `daft_v2_d6_prelu` the network incorporate the changes of `daft_v2` plus a dropout with probability `0.6` and PReLU activation function.
+    - `daft_v2_d6` the network incorporate the changes of `daft_v2` plust a dropout with probability `0.6` and ReLU activation function.
+    The branch also has:
+    - `create_2groups_dataset.py` file to create de hdf5 file that follows the hierarchy of the repository.
+       This file generates `train.h5`, `val.h5` and `test.h5` files for 3 folds given a 4 set of valid folder names.
+    - File to compute ensemble confusion matrix and balanced accuracy from already trained model checkpoint and test dataloader.
+ 
+ - `branch_net_distance`: Modification on the `daft_v2` networks such as
+    - `SiameseCL` the network is a Siamese network with contrastive loss and Euclidian distance that receive a pair of images with the same structure as `daft_v2` 
+       the images correspond to two different groups in this multiple sclerosis mild disease ( CIS, RR) or progressive disease (SP, PP).
+    The branch also has:
+    -  `create_2groups_paired_dataset.py` file to create de hdf5 file that follows the hierarchy of the repository with minor modifications to the structure.
+    -  File to compute ensemble confusion matrix and accuracy from already trained model checkpoint and test dataloader.
+
+In progress...
+
 # Combining 3D Image and Tabular Data via the Dynamic Affine Feature Map Transform
 
 [![Journal Paper](https://img.shields.io/static/v1?label=DOI&message=10.1016%2fj.neuroimage.2022.119505&color=3a7ebb)](https://dx.doi.org/10.1016/j.neuroimage.2022.119505)
