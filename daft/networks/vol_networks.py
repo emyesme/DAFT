@@ -12,16 +12,16 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-from collections import OrderedDict
-from typing import Any, Dict, Optional, Sequence
 
 import torch
 import torch.nn as nn
-
+from collections import OrderedDict
 from ..models.base import BaseModel
-from .vol_blocks import ConvBnReLU, ConvBnSeLU, DAFTBlock, FilmBlock, ResBlock, ResSeLUBlock, ResDropoutBlock
 from .vol_blocks import ConvBnReLUDropout
+from typing import Any, Dict, Optional, Sequence
 from .vol_blocks import ConvBnLeakyReLUDropout, ResDropoutLeakyBlock
+from .vol_blocks import ConvBnReLU, ConvBnSeLU, DAFTBlock, FilmBlock, ResBlock, ResSeLUBlock, ResDropoutBlock
+
 
 class HeterogeneousResNet(BaseModel):
     def __init__(self, in_channels=1, n_outputs=3, bn_momentum=0.1, n_basefilters=4) -> None:
@@ -60,14 +60,13 @@ class HeterogeneousResNet(BaseModel):
 
 class ConcatHNN1FC(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
     ) -> None:
-
         super().__init__()
         self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
@@ -103,15 +102,14 @@ class ConcatHNN1FC(BaseModel):
 
 class ConcatHNN2FC(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
-        bottleneck_dim: int = 7,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
+            bottleneck_dim: int = 7,
     ):
-
         super().__init__()
         self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
@@ -122,7 +120,6 @@ class ConcatHNN2FC(BaseModel):
         self.global_pool = nn.AdaptiveAvgPool3d(1)
         layers = [
             ("fc1", nn.Linear(8 * n_basefilters + ndim_non_img, bottleneck_dim)),
-            # ("dropout", nn.Dropout(p=0.5, inplace=True)),
             ("relu", nn.ReLU()),
             ("fc2", nn.Linear(bottleneck_dim, n_outputs)),
         ]
@@ -153,15 +150,14 @@ class ConcatHNN2FC(BaseModel):
 
 class ConcatHNNMCM(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
-        bottleneck_dim: int = 7,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
+            bottleneck_dim: int = 7,
     ) -> None:
-
         super().__init__()
         self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
@@ -206,14 +202,13 @@ class InteractiveHNN(BaseModel):
     """
 
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
     ) -> None:
-
         super().__init__()
 
         # ResNet
@@ -284,12 +279,12 @@ class FilmHNN(BaseModel):
     """
 
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -327,106 +322,15 @@ class FilmHNN(BaseModel):
 
         return {"logits": out}
 
-class DAFTSeLU(BaseModel):
-    def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
-    ) -> None:
-        super().__init__()
-
-        if filmblock_args is None:
-            filmblock_args = {}
-
-        self.split_size = 4 * n_basefilters
-        self.conv1 = ConvBnSeLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
-        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
-        self.block1 = ResSeLUBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
-        self.block2 = ResSeLUBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
-        self.block3 = ResSeLUBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
-        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
-        self.global_pool = nn.AdaptiveAvgPool3d(1)
-        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
-
-    @property
-    def input_names(self) -> Sequence[str]:
-        return ("image", "tabular")
-
-    @property
-    def output_names(self) -> Sequence[str]:
-        return ("logits",)
-
-    def forward(self, image, tabular):
-        out = self.conv1(image)
-        out = self.pool1(out)
-        out = self.block1(out)
-        out = self.block2(out)
-        out = self.block3(out)
-        out = self.blockX(out, tabular)
-        out = self.global_pool(out)
-        out = out.view(out.size(0), -1)
-        out = self.fc(out)
-
-        return {"logits": out}
-
-# this version have dropout
-class DAFT_v2(BaseModel):
-    def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
-    ) -> None:
-        super().__init__()
-
-        if filmblock_args is None:
-            filmblock_args = {}
-
-        self.split_size = 4 * n_basefilters
-        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
-        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
-        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
-        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.7)  # 16
-        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.7)  # 8
-        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
-        self.global_pool = nn.AdaptiveAvgPool3d(1)
-        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
-
-    @property
-    def input_names(self) -> Sequence[str]:
-        return ("image", "tabular")
-
-    @property
-    def output_names(self) -> Sequence[str]:
-        return ("logits",)
-
-    def forward(self, image, tabular):
-        out = self.conv1(image)
-        out = self.pool1(out)
-        out = self.block1(out)
-        out = self.block2(out)
-        out = self.block3(out)
-        out = self.blockX(out, tabular)
-        out = self.global_pool(out)
-        out = out.view(out.size(0), -1)
-        out = self.fc(out)
-
-        return {"logits": out}
-
 
 class DAFT(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -464,51 +368,6 @@ class DAFT(BaseModel):
 
         return {"logits": out}
 
-class noDAFT(BaseModel):
-    def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
-    ) -> None:
-        super().__init__()
-
-        if filmblock_args is None:
-            filmblock_args = {}
-
-        self.split_size = 4 * n_basefilters
-        self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
-        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
-        self.block1 = ResBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
-        self.block2 = ResBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
-        self.block3 = ResBlock(2 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
-        #self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
-        self.global_pool = nn.AdaptiveAvgPool3d(1)
-        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
-
-    @property
-    def input_names(self) -> Sequence[str]:
-        return ("image", "tabular")
-
-    @property
-    def output_names(self) -> Sequence[str]:
-        return ("logits",)
-
-    def forward(self, image, tabular):
-        out = self.conv1(image)
-        out = self.pool1(out)
-        out = self.block1(out)
-        out = self.block2(out)
-        out = self.block3(out)
-        #out = self.blockX(out, tabular)
-        out = self.global_pool(out)
-        out = out.view(out.size(0), -1)
-        out = self.fc(out)
-
-        return {"logits": out}
-
 
 class Siamese(BaseModel):
     def __init__(
@@ -525,11 +384,13 @@ class Siamese(BaseModel):
             filmblock_args = {}
 
         self.split_size = 4 * n_basefilters
-        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
-        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
-        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 16
-        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 8
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.6)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.6)  # 8
         self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
         self.global_pool = nn.AdaptiveAvgPool3d(1)
 
@@ -558,7 +419,7 @@ class Siamese(BaseModel):
         out = self.block2(out)
         out = self.block3(out)
         out = self.blockX(out, tabular)
-        out = self.global_pool(out)#######
+        out = self.global_pool(out)
 
         return out
 
@@ -568,18 +429,22 @@ class Siamese(BaseModel):
 
         out = abs(out1 - out2)
 
-        #out1 = out1.view(out1.size()[0], -1)
+        # out1 = out1.view(out1.size()[0], -1)
         out = out.view(out.size()[0], -1)
 
-        #TODO: contrastive loss here
-        #out = out1 - out2
+        # TODO: contrastive loss here
+        # out = out1 - out2
 
         out = self.fc1(out)
 
         return {"logits": out}
 
 
-class Siamese_leakyrelu(BaseModel):
+# Siamese network to compute the output with contrastive loss
+# The head of the siamese network is the daft_v2 with dropout of probability  0.6
+# and PReLU as activation function
+# The network has a specific structure of the forward output to compute the contrastive loss
+class SiameseCL(BaseModel):
     def __init__(
             self,
             in_channels: int,
@@ -594,20 +459,23 @@ class Siamese_leakyrelu(BaseModel):
             filmblock_args = {}
 
         self.split_size = 4 * n_basefilters
-        self.conv1 = ConvBnLeakyReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
-        self.block1 = ResDropoutLeakyBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
-        self.block2 = ResDropoutLeakyBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 16
-        self.block3 = ResDropoutLeakyBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.5)  # 8
-        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.6)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.6)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum,
+                                **filmblock_args)  # 4
         self.global_pool = nn.AdaptiveAvgPool3d(1)
 
         self.fc1 = nn.Sequential(
             nn.Linear(8 * n_basefilters, 4 * n_basefilters),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
 
             nn.Linear(4 * n_basefilters, n_basefilters),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
 
             nn.Linear(n_basefilters, n_outputs)
         )
@@ -627,7 +495,7 @@ class Siamese_leakyrelu(BaseModel):
         out = self.block2(out)
         out = self.block3(out)
         out = self.blockX(out, tabular)
-        out = self.global_pool(out)#######
+        out = self.global_pool(out)
 
         return out
 
@@ -635,15 +503,9 @@ class Siamese_leakyrelu(BaseModel):
         out1 = self.forward_once(image[0], tabular[0])
         out2 = self.forward_once(image[1], tabular[1])
 
-        out = abs(out1 - out2)
+        out1 = out1.view(out1.size()[0], -1)
+        out2 = out2.view(out2.size()[0], -1)
 
-        #out1 = out1.view(out1.size()[0], -1)
-        out = out.view(out.size()[0], -1)
-
-        #TODO: contrastive loss here
-        #out = out1 - out2
-
-        out = self.fc1(out)
-
-        return {"logits": out}
-
+        # We stack the output of the two heads
+        # we will use this outputs for the new loss, contrastive loss
+        return {"logits": torch.stack([out1, out2])}

@@ -12,28 +12,28 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-import argparse
-import inspect
+
+
 import json
+import torch
+import inspect
+import argparse
 import warnings
-from abc import ABCMeta, abstractmethod
+from pathlib import Path
 from datetime import datetime
 from functools import partial
-from pathlib import Path
-from typing import Any, Dict, Sequence, Tuple
-
-import torch
-from torch.optim.optimizer import Optimizer
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.data.dataloader import default_collate
-
 from .data_utils import adni_hdf
-from .data_utils.surv_data import cox_collate_fn
 from .models.base import BaseModel
-from .models.losses import CoxphLoss
 from .networks import vol_networks
-from .training.metrics import Accuracy, BalancedAccuracy, ConfusionMatrix, ConcordanceIndex, Mean, Metric
+from abc import ABCMeta, abstractmethod
+from torch.optim.optimizer import Optimizer
+from typing import Any, Dict, Sequence, Tuple
+from .data_utils.surv_data import cox_collate_fn
+from torch.utils.data import DataLoader, Dataset
+from .models.losses import CoxphLoss, ContrastiveLoss
+from torch.utils.data.dataloader import default_collate
 from .training.wrappers import LossWrapper, NamedDataLoader
+from .training.metrics import Accuracy, BalancedAccuracy, ConfusionMatrix, ConcordanceIndex, Mean, Metric
 
 
 def create_parser():
@@ -58,7 +58,7 @@ def create_parser():
     g = parser.add_argument_group("Architecture")
     g.add_argument(
         "--discriminator_net",
-        choices=["resnet", "siamese", "siamese_leakyrelu"],
+        choices=["resnet", "siamese", "siamese_leakyrelu", "siameseCL"],
         default="siamese",
         help="which architecture to use. Default: %(default)s",
     )
@@ -159,7 +159,12 @@ def create_parser():
         default=False,
         help="Normalize tabular data with mean and variance of whole dataset. Default: %(default)s",
     )
-
+    g.add_argument(
+        "--contrastive_loss",
+        action="store_true",
+        default=False,
+        help="Use contrastive loss as criterion, it work with siamese, it needs the euclidian distance argument in the data"
+    )
     return parser
 
 
@@ -303,7 +308,7 @@ class BaseModelFactory(metaclass=ABCMeta):
         n_params = get_number_of_parameters(model)
         print(f"Number of parameters: {n_params:,}")
 
-    def get_loss(self) -> LossWrapper:
+    def get_loss(self, icontrastive: bool) -> LossWrapper:
         """Return the loss to optimize."""
         if self._task == adni_hdf.Task.SURVIVAL_ANALYSIS:
             loss = LossWrapper(
@@ -312,25 +317,36 @@ class BaseModelFactory(metaclass=ABCMeta):
         else:
             if self.args.num_classes > 2:
                 loss = LossWrapper(
-                    # TODO: Categorical crossentropy loss
-                    # is this categorial?
                     torch.nn.CrossEntropyLoss(), input_names=["logits", "target"], output_names=["cross_entropy"]
                 )
             else:
-                loss = LossWrapper(
-                    torch.nn.BCEWithLogitsLoss(),
-                    input_names=["logits", "target"],
-                    output_names=["cross_entropy"],
-                    binary=True,
-                )
+                # set the loss as contrastive loss
+                if icontrastive:
+                    loss = LossWrapper(
+                        ContrastiveLoss(),
+                        input_names=["logits", "target"],
+                        output_names=["contrastive_loss"],
+                        binary=True
+                    )
+                else:
+                    loss = LossWrapper(
+                        torch.nn.BCEWithLogitsLoss(),
+                        input_names=["logits", "target"],
+                        output_names=["cross_entropy"],
+                        binary=True,
+                    )
         return loss
 
-    def get_metrics(self) -> Sequence[Metric]:
+    def get_metrics(self, icontrastive: bool) -> Sequence[Metric]:
         """Returns a list of metrics to compute."""
         if self._task == adni_hdf.Task.SURVIVAL_ANALYSIS:
             metrics = [Mean("partial_log_lik")]
         else:
-            metrics = [Mean("cross_entropy")]
+            # set the new metric as contrastive
+            if icontrastive:
+                metrics = [Mean("contrastive_loss")]
+            else:
+                metrics = [Mean("cross_entropy")]
         metrics.extend(self.get_test_metrics())
         return metrics
 
@@ -453,6 +469,7 @@ class HeterogeneousModelFactory(BaseModelFactory):
             "resnet": vol_networks.HeterogeneousResNet,
             "siamese": vol_networks.Siamese,
             "siamese_leakyrelu": vol_networks.Siamese_leakyrelu,
+            "siameseCL": vol_networks.SiameseCL,
         }
         if args.discriminator_net not in class_dict:
             raise ValueError("network {!r} is unsupported".format(args.discriminator_net))

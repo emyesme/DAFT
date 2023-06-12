@@ -12,19 +12,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-from itertools import chain
-from operator import itemgetter
-from typing import Dict, Optional, Sequence, Union
 
 import torch
-from torch import Tensor
-from torch.optim.lr_scheduler import _LRScheduler
-from torch.optim.optimizer import Optimizer
+import numpy as np
 from tqdm import tqdm
-
-from ..models.base import BaseModel, check_is_unique
 from .hooks import Hook
+from torch import Tensor
+from itertools import chain
+from operator import itemgetter
 from .wrappers import DataLoaderWrapper
+from torch.optim.optimizer import Optimizer
+from torch.optim.lr_scheduler import _LRScheduler
+from ..models.base import BaseModel, check_is_unique
+from typing import Dict, Optional, Sequence, Union
 
 
 def train_and_evaluate(
@@ -78,7 +78,12 @@ def train_and_evaluate(
     evaluator = None
     if eval_data is not None:
         evaluator = ModelEvaluator(
-            model=model, loss=loss, data=eval_data, device=device, hooks=eval_hooks, progressbar=progressbar,
+            model=model,
+            loss=loss,
+            data=eval_data,
+            device=device,
+            hooks=eval_hooks,
+            progressbar=progressbar,
         )
 
     trainer = ModelTrainer(
@@ -92,7 +97,7 @@ def train_and_evaluate(
     )
     get_lr = itemgetter("lr")
 
-    early_stopping = EarlyStopping(tolerance=10, min_delta=10)
+    early_stopping = EarlyStopping(tolerance=10, min_delta=5)
 
     for i in range(num_epochs):
         lr = [get_lr(pg) for pg in optimizer.param_groups]
@@ -103,9 +108,12 @@ def train_and_evaluate(
         if scheduler is not None:
             #scheduler.step(evaluator.outputs['cross_entropy'])
             scheduler.step()
+        # after each epoch
+        # recompute train euclidian distance and label train from the distance
+        evaluator.updateThreshold()
 
         # early stopping
-        early_stopping(trainer.outputs["cross_entropy"], evaluator.outputs["cross_entropy"])
+        early_stopping(trainer.outputs["contrastive_loss"], evaluator.outputs["contrastive_loss"])
         if early_stopping.early_stop:
             print("we apply early stopping at epoch : ", i)
             break
@@ -159,6 +167,11 @@ class ModelRunner:
         self.hooks = hooks or []
         self.progressbar = progressbar
         self.outputs = None
+        # variable for the history of the Euclidian distance
+        self.distance_history = {"labels": torch.empty((0), dtype=torch.int8),
+                                 "distances": torch.empty((0), dtype=torch.int8)}
+        # threshold variable
+        self.threshold = 1
 
     def _dispatch(self, func: str, *args) -> None:
         with torch.no_grad():
@@ -172,16 +185,12 @@ class ModelRunner:
 
         assert len(self.data.output_names) == len(batch), "output_names suggests {:d} tensors, but only found {:d} " \
                                                           "outputs".format(len(self.data.output_names), len(batch))
-        import numpy as np
+
         batch = dict(zip(self.data.output_names, batch))
-        #print(" _batch_to_device batch keys ", batch.keys())
         if self.device is not None:
             for k, v in batch.items():
-                #print(" _batch_to_device key ", k)
-                #print(" _batch_to_device v 0", np.array(v, dtype=object)[0].shape)  # (2,) 8 images ( when batch 8)
-                #print(" _batch_to_device v 1", np.array(v, dtype=object)[1].shape)  # 8 tabular
-
                 if k in ["image", "tabular"]:
+                    # stack together the two images or two tabular rows
                     batch[k] = [v[0].to(self.device), v[1].to(self.device)]
                 else:
                     batch[k] = v.to(self.device)
@@ -191,28 +200,41 @@ class ModelRunner:
     def _set_model_state(self) -> None:
         pass
 
+    def updateThreshold(self) -> None:
+
+        # mainly extracted from
+        # https://github.com/QTIM-Lab/SiameseChange/blob/master/main.py#L185
+
+        euclid_if_0 = [b.detach().numpy() for a, b in zip(self.distance_history["labels"].detach().numpy(), self.distance_history["distances"]) if a == 0]
+        euclid_if_1 = [b.detach().numpy() for a, b in zip(self.distance_history["labels"].detach().numpy(), self.distance_history["distances"]) if a == 1]
+
+        # summary statistics for Euclidean distances
+        mean_euclid_0v = np.mean(euclid_if_0)
+        mean_euclid_1v = np.mean(euclid_if_1)
+        # euclid_diff_v = mean_euclid_1v - mean_euclid_0v
+
+        # after the epoch is completed
+        # adjust the threshold variable based on the validation mean Euclidean distances
+        self.threshold = (mean_euclid_0v + mean_euclid_1v) / 2
+
     def run(self) -> None:
         """Execute model for every batch."""
         self._set_model_state()
         self._dispatch("on_begin_epoch")
-        #print(" train and eval data len ", len(self.data))
         pbar = tqdm(self.data, total=len(self.data), disable=not self.progressbar)
         for batch in pbar:
             batch = self._batch_to_device(batch)
             self._dispatch("before_step", batch)
             self.outputs = self._step(batch)  # to track outputs for schedulers that follow the metric
-            self._dispatch("after_step", self.outputs)
 
+            self._dispatch("after_step", self.outputs)
+        self.updateThreshold()
         self._dispatch("on_end_epoch")
 
     def _get_model_inputs_from_batch(self, batch: Dict[str, Tensor]) -> Sequence[Tensor]:
         # to get rid of unnecessary dimensions when adding multiple channels
-        import numpy as np
-        #print("train and eval _get_model_inputs_from_batch ", np.array(batch["image"], dtype=object).shape)
-        ####################################################con
-        #print("train and eval _get_model_inputs_from_batch ", batch["image"][0].shape)
-        batch["image"][0] = batch["image"][0]#.squeeze(1)
-        batch["image"][1] = batch["image"][1]#.squeeze(1)
+        batch["image"][0] = batch["image"][0].squeeze(1)
+        batch["image"][1] = batch["image"][1].squeeze(1)
         assert len(batch) >= len(self.model.input_names), "model expects {:d} inputs, but batch has only {:d}".format(
             len(self.model.input_names), len(batch)
         )
@@ -222,6 +244,14 @@ class ModelRunner:
     def _step(self, batch: Dict[str, Tensor]) -> Dict[str, Tensor]:
         in_batch = self._get_model_inputs_from_batch(batch)
         out_tensors = self.model(*in_batch)
+        results = torch.empty((0), dtype=torch.int8)
+        for num, output in enumerate(out_tensors["logits"]):
+            # computing the Euclidian distance
+            distance = torch.nn.functional.pairwise_distance(output[0].cpu(), output[1].cpu()).reshape(1)
+            results = torch.cat((results, distance > self.threshold), dim=0)
+
+        out_tensors["logits"] = results
+
         assert len(out_tensors) == len(
             self.model.output_names
         ), "output_names suggests {:d} tensors, but only found {:d} outputs".format(
@@ -291,7 +321,20 @@ class ModelEvaluator(ModelRunner):
         losses = self.loss(*loss_inputs)
         outputs["total_loss"] = sum(losses.values())
         outputs.update(losses)
+        results = torch.empty((0), dtype=torch.int8)
+        for num, output in enumerate(outputs["logits"]):
+            # compute the Euclidian distance during the evaluation of the model
+            # and update the results with the current threshold
+            distance = torch.nn.functional.pairwise_distance(output[0].cpu(), output[1].cpu()).reshape(1)
+            self.distance_history["distances"] = torch.cat((self.distance_history["distances"],
+                                                            distance),
+                                                           dim=0)
+            self.distance_history["labels"] = torch.cat((self.distance_history["labels"],
+                                                         batch["target"][num].cpu().reshape(1)),
+                                                        dim=0)
+            results = torch.cat((results, distance > self.threshold), dim=0)
 
+        outputs["logits"] = results
         return outputs
 
     def _step(self, batch: Dict[str, Tensor]) -> Dict[str, Tensor]:

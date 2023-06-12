@@ -51,7 +51,7 @@ class ConvBnReLUDropout(nn.Module):
         super().__init__()
         self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=False)
         self.bn = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.PReLU()
         ###
         self.dropout = nn.Dropout3d(p=dropout_p)
 
@@ -144,7 +144,7 @@ class ResDropoutBlock(nn.Module):
         self.dropout = nn.Dropout3d(p=dropout_p)
         self.conv2 = conv3d(out_channels, out_channels)
         self.bn2 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.PReLU()
 
         if stride != 1 or in_channels != out_channels:
             self.downsample = nn.Sequential(
@@ -481,7 +481,7 @@ class DAFTBlock(FilmBase):
         # create aux net
         layers = [
             ("aux_base", nn.Linear(ndim_non_img + aux_input_dims, self.bottleneck_dim, bias=False)),
-            ("aux_relu", nn.ReLU()),
+            ("aux_relu", nn.PReLU()),
             ("aux_out", nn.Linear(self.bottleneck_dim, self.film_dims, bias=False)),
         ]
         self.aux = nn.Sequential(OrderedDict(layers))

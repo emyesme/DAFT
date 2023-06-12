@@ -14,11 +14,9 @@
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
 import torch
 from torch.optim.lr_scheduler import LambdaLR
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.optim.lr_scheduler import StepLR
+from daft.training.train_and_eval import train_and_evaluate
 from daft.cli import HeterogeneousModelFactory, create_parser
 from daft.training.hooks import CheckpointSaver, TensorBoardLogger
-from daft.training.train_and_eval import train_and_evaluate
 
 
 def main(args=None):
@@ -35,27 +33,29 @@ def main(args=None):
     discriminator = factory.get_and_init_model()
     # here assign optimizer given lr value, decay and other variables
     optimizerD = factory.get_optimizer(filter(lambda p: p.requires_grad, discriminator.parameters()))
-    loss = factory.get_loss()
+    loss = factory.get_loss(args.contrastive_loss)
 
     tb_log_dir = experiment_dir / "tensorboard"
     checkpoints_dir = experiment_dir / "checkpoints"
     tb_log_dir.mkdir(parents=True, exist_ok=True)
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
-    train_metrics = factory.get_metrics()
+    # use contrastive loss as loss
+    train_metrics = factory.get_metrics(args.contrastive_loss)
     train_hooks = [TensorBoardLogger(str(tb_log_dir / "train"), train_metrics)]
 
-    eval_metrics_tb = factory.get_metrics()
+    # use contrastive loss as loss
+    eval_metrics_tb = factory.get_metrics(args.contrastive_loss)
     eval_hooks = [TensorBoardLogger(str(tb_log_dir / "eval"), eval_metrics_tb)]
 
-    eval_metrics_cp = factory.get_metrics()
+    # use contrastive loss as loss
+    eval_metrics_cp = factory.get_metrics(args.contrastive_loss)
     eval_hooks.append(
         CheckpointSaver(discriminator, checkpoints_dir, save_every_n_epochs=1, max_keep=5, metrics=eval_metrics_cp)
     )
 
     def lr_factor(epoch):
-        if epoch <= int(0.6 * args.epoch):################
-            # TODO: maybe changing the lr or even the scheduler here?
+        if epoch <= int(0.6 * args.epoch):
             # there is a plateau in the current model always in the 60 epoch
             return 1
         if epoch <= int(0.9 * args.epoch):

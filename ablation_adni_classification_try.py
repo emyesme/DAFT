@@ -66,29 +66,32 @@ def get_experiment(data_dir: Path,
         cmd.append(f"--{k}")
         cmd.append(v)
 
+    cmd.append("--contrastive_loss")
+
     return cmd
 
 
 def main():
-    experiment_name = "2groups_siamese_balanced"
-    net = "siamese_leakyrelu"
-    for fold in [1,2,3]:
-        print("siamese fold ", 1)
+    experiment_name = "SiameseCL_config_daft_best_secondtry"
+    net = "siameseCL"
+    for fold in [1, 2, 3]:
+        print("siamese fold ", fold)
         args = get_experiment("/home/ecarvajal /Desktop/DAFT_branch/DAFT/data_dir",
                               experiment_name,
                               net, # name of the network
                               2, # number of classes
-                              "mix_balanced_2g_t1_train_fold"+str(fold)+".h5",
-                              "mix_balanced_2g_t1_val_fold"+str(fold)+".h5",
-                              "mix_balanced_2g_t1_test_fold"+str(fold)+".h5",
+                              "mix_balanced_2g_train_fold"+str(fold)+".h5",
+                              "mix_balanced_2g_val_fold"+str(fold)+".h5",
+                              "mix_balanced_2g_test_fold"+str(fold)+".h5",
                             "2", # batch size
                             "AdamW", # optimizer
                             "tanh", # activation function
                             "0.00013", # lr
                             "0.001", # decay rate
-                            "1" # input channels
+                            "3" # input channels
                               )
         main_train(args)
+        print("end siamese fold ", fold)
 
 
 if __name__ == "__main__":

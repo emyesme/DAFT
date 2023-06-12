@@ -12,13 +12,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-from abc import ABCMeta, abstractmethod
-from typing import Dict
-
-import numpy as np
 import torch
-from sksurv.metrics import concordance_index_censored
+import numpy as np
+from typing import Dict
 from torch import Tensor
+from abc import ABCMeta, abstractmethod
+from sksurv.metrics import concordance_index_censored
 
 
 class Metric(metaclass=ABCMeta):
@@ -129,7 +128,7 @@ class Accuracy(Metric):
 
     def update(self, inputs: Dict[str, Tensor], outputs: Dict[str, Tensor]) -> None:
         target_tensor = inputs[self._target].detach().cpu()
-        pred = outputs[self._prediction].detach().cpu()
+        pred = outputs[self._prediction].detach().cpu().unsqueeze(1)
         if pred.shape[1] < 2:
             pred2 = torch.zeros([pred.shape[0], 2])
             pred2[pred[:, 0] > 0, 1] = 1
@@ -176,7 +175,7 @@ class BalancedAccuracy(Metric):
         self._total = np.zeros(self._n_classes, dtype=int)
 
     def update(self, inputs: Dict[str, Tensor], outputs: Dict[str, Tensor]) -> None:
-        pred = outputs[self._prediction].detach().cpu()
+        pred = outputs[self._prediction].detach().cpu().unsqueeze(1)
         if pred.shape[1] < 2:
             pred2 = torch.zeros([pred.shape[0], 2])
             pred2[pred[:, 0] > 0, 1] = 1
@@ -232,10 +231,9 @@ class ConfusionMatrix(Metric):
         self._all_prediction = []
 
     def update(self, inputs: Dict[str, Tensor], outputs: Dict[str, Tensor]) -> None:
-
         self._all_target.extend(inputs[self._target].detach().cpu().tolist())
+        pred = outputs[self._prediction].detach().cpu().unsqueeze(1)
 
-        pred = outputs[self._prediction].detach().cpu()
         if pred.shape[1] < 2:
             pred2 = torch.zeros([pred.shape[0], 2])
             pred2[pred[:, 0] > 0, 1] = 1

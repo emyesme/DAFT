@@ -12,14 +12,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Sequence
 
 import torch
 from torch.nn import Module
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader, Dataset
-
 from ..models.base import BaseModel
+from typing import Optional, Sequence
+from torch.utils.data import DataLoader, Dataset
 
 
 class LossWrapper(BaseModel):
@@ -61,8 +59,13 @@ class LossWrapper(BaseModel):
 
     def forward(self, *inputs):
         if self._binary:
-            inputs = (torch.squeeze(inputs[0]), inputs[1].type(torch.cuda.FloatTensor))
-        outputs = self._loss(*inputs)
+            # change the input structure to match the two images and tabular structure
+            inputs = (torch.squeeze(inputs[0][0]), torch.squeeze(inputs[0][1]),
+                      inputs[1].type(torch.cuda.FloatTensor),
+                      )
+
+        outputs = self._loss(*inputs, )
+
         # if self._binary:
         #     outputs = torch.unsqueeze(outputs,dim=-1)
         if not isinstance(outputs, (list, tuple)):
