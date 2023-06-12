@@ -31,7 +31,7 @@ def conv3d(in_channels, out_channels, kernel_size=3, stride=1):
 
 class ConvBnReLU(nn.Module):
     def __init__(
-        self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1,
+            self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1,
     ):
         super().__init__()
         self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=False)
@@ -44,14 +44,35 @@ class ConvBnReLU(nn.Module):
         out = self.relu(out)
         return out
 
-class ConvBnReLUDropout(nn.Module):
+
+class ConvBnPReLUDropout(nn.Module):
     def __init__(
-        self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1, dropout_p=0.5
+            self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1, dropout_p=0.5
     ):
         super().__init__()
         self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=False)
         self.bn = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.PReLU()
+        ###
+        self.dropout = nn.Dropout3d(p=dropout_p)
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+        return out
+
+
+class ConvBnReLUDropout(nn.Module):
+    def __init__(
+            self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1, dropout_p=0.5
+    ):
+        super().__init__()
+        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=False)
+        self.bn = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.relu = nn.ReLU()
         ###
         self.dropout = nn.Dropout3d(p=dropout_p)
 
@@ -66,7 +87,7 @@ class ConvBnReLUDropout(nn.Module):
 
 class ConvBnSeLU(nn.Module):
     def __init__(
-        self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1,
+            self, in_channels, out_channels, bn_momentum=0.05, kernel_size=3, stride=1, padding=1,
     ):
         super().__init__()
         self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=padding, bias=False)
@@ -78,6 +99,7 @@ class ConvBnSeLU(nn.Module):
         out = self.bn(out)
         out = self.selu(out)
         return out
+
 
 class ResBlock(nn.Module):
     def __init__(self, in_channels, out_channels, bn_momentum=0.05, stride=1):
@@ -115,48 +137,8 @@ class ResBlock(nn.Module):
 
         return out
 
-class ResDropoutBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, bn_momentum=0.05, stride=1, dropout_p=0.5):
-        super().__init__()
-        self.conv1 = conv3d(in_channels, out_channels, stride=stride)
-        self.bn1 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
-        self.dropout = nn.Dropout3d(p=dropout_p)
-        self.conv2 = conv3d(out_channels, out_channels)
-        self.bn2 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
-        self.relu = nn.ReLU(inplace=True)
 
-        if stride != 1 or in_channels != out_channels:
-            self.downsample = nn.Sequential(
-                conv3d(in_channels, out_channels, kernel_size=1, stride=stride),
-                nn.BatchNorm3d(out_channels, momentum=bn_momentum),
-            )
-        else:
-            self.downsample = None
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-
-        out = self.relu(out)
-        ###
-        out = self.dropout(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-        ###
-        out = self.dropout(out)
-
-        return out
-
-
+# Variation of the ResBlock using SeLU instead of ReLU as activation function
 class ResSeLUBlock(nn.Module):
     def __init__(self, in_channels, out_channels, bn_momentum=0.05, stride=1):
         super().__init__()
@@ -194,20 +176,107 @@ class ResSeLUBlock(nn.Module):
         return out
 
 
+# Variation of the ResBlock including dropout layer with dropout probability as variability
+class ResDropoutBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, bn_momentum=0.05, stride=1, dropout_p=0.5):
+        super().__init__()
+        self.conv1 = conv3d(in_channels, out_channels, stride=stride)
+        self.bn1 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.dropout = nn.Dropout3d(p=dropout_p)
+        self.conv2 = conv3d(out_channels, out_channels)
+        self.bn2 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.relu = nn.ReLU()
+
+        if stride != 1 or in_channels != out_channels:
+            self.downsample = nn.Sequential(
+                conv3d(in_channels, out_channels, kernel_size=1, stride=stride),
+                nn.BatchNorm3d(out_channels, momentum=bn_momentum),
+            )
+        else:
+            self.downsample = None
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+
+        return out
+
+
+# Variation of the ResBlock using dropout as an extra layer with the dropout as input variable
+# and PReLU instead of ReLU
+class ResDropoutPReLUBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, bn_momentum=0.05, stride=1, dropout_p=0.5):
+        super().__init__()
+        self.conv1 = conv3d(in_channels, out_channels, stride=stride)
+        self.bn1 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.dropout = nn.Dropout3d(p=dropout_p)
+        self.conv2 = conv3d(out_channels, out_channels)
+        self.bn2 = nn.BatchNorm3d(out_channels, momentum=bn_momentum)
+        self.relu = nn.PReLU()
+
+        if stride != 1 or in_channels != out_channels:
+            self.downsample = nn.Sequential(
+                conv3d(in_channels, out_channels, kernel_size=1, stride=stride),
+                nn.BatchNorm3d(out_channels, momentum=bn_momentum),
+            )
+        else:
+            self.downsample = None
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+        ###
+        out = self.dropout(out)
+
+        return out
+
+
 class FilmBase(nn.Module, metaclass=ABCMeta):
     """Absract base class for models that are related to FiLM of Perez et al"""
 
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        bn_momentum: float,
-        stride: int,
-        ndim_non_img: int,
-        location: int,
-        activation: str,
-        scale: bool,
-        shift: bool,
+            self,
+            in_channels: int,
+            out_channels: int,
+            bn_momentum: float,
+            stride: int,
+            ndim_non_img: int,
+            location: int,
+            activation: str,
+            scale: bool,
+            shift: bool,
     ) -> None:
 
         super().__init__()
@@ -291,17 +360,17 @@ class FilmBase(nn.Module, metaclass=ABCMeta):
 
 class FilmBlock(FilmBase):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        bn_momentum: float = 0.1,
-        stride: int = 2,
-        ndim_non_img: int = 15,
-        location: int = 0,
-        activation: str = "linear",
-        scale: bool = True,
-        shift: bool = True,
-        bottleneck_dim: int = 7,
+            self,
+            in_channels: int,
+            out_channels: int,
+            bn_momentum: float = 0.1,
+            stride: int = 2,
+            ndim_non_img: int = 15,
+            location: int = 0,
+            activation: str = "linear",
+            scale: bool = True,
+            shift: bool = True,
+            bottleneck_dim: int = 7,
     ):
 
         super().__init__(
@@ -343,7 +412,7 @@ class FilmBlock(FilmBase):
         attention = self.aux(x_aux)
 
         assert (attention.size(0) == feature_map.size(0)) and (
-            attention.dim() == 2
+                attention.dim() == 2
         ), f"Invalid size of output tensor of auxiliary network: {attention.size()}"
 
         if self.scale == self.shift:
@@ -373,17 +442,17 @@ class FilmBlock(FilmBase):
 class DAFTBlock(FilmBase):
     # Block for ZeCatNet
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        bn_momentum: float = 0.1,
-        stride: int = 2,
-        ndim_non_img: int = 15,
-        location: int = 0,
-        activation: str = "linear",
-        scale: bool = True,
-        shift: bool = True,
-        bottleneck_dim: int = 7,
+            self,
+            in_channels: int,
+            out_channels: int,
+            bn_momentum: float = 0.1,
+            stride: int = 2,
+            ndim_non_img: int = 15,
+            location: int = 0,
+            activation: str = "linear",
+            scale: bool = True,
+            shift: bool = True,
+            bottleneck_dim: int = 7,
     ) -> None:
 
         super().__init__(
@@ -452,20 +521,105 @@ class DAFTBlock(FilmBase):
 
         return (v_scale * feature_map) + v_shift
 
+
+# Variation of the DAFTBlock with PReLU instead of ReLU as activation function
+class DAFTPReLUBlock(FilmBase):
+    # Block for ZeCatNet
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            bn_momentum: float = 0.1,
+            stride: int = 2,
+            ndim_non_img: int = 15,
+            location: int = 0,
+            activation: str = "linear",
+            scale: bool = True,
+            shift: bool = True,
+            bottleneck_dim: int = 7,
+    ) -> None:
+
+        super().__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            bn_momentum=bn_momentum,
+            stride=stride,
+            ndim_non_img=ndim_non_img,
+            location=location,
+            activation=activation,
+            scale=scale,
+            shift=shift,
+        )
+
+        self.bottleneck_dim = bottleneck_dim
+        aux_input_dims = self.film_dims
+        # shift and scale decoding
+        self.split_size = 0
+        if scale and shift:
+            self.split_size = self.film_dims
+            self.scale = None
+            self.shift = None
+            self.film_dims = 2 * self.film_dims
+        elif not scale:
+            self.scale = 1
+            self.shift = None
+        elif not shift:
+            self.shift = 0
+            self.scale = None
+
+        # create aux net
+        layers = [
+            ("aux_base", nn.Linear(ndim_non_img + aux_input_dims, self.bottleneck_dim, bias=False)),
+            ("aux_relu", nn.PReLU()),
+            ("aux_out", nn.Linear(self.bottleneck_dim, self.film_dims, bias=False)),
+        ]
+        self.aux = nn.Sequential(OrderedDict(layers))
+
+    def rescale_features(self, feature_map, x_aux):
+
+        squeeze = self.global_pool(feature_map)
+        squeeze = squeeze.view(squeeze.size(0), -1)
+        squeeze = torch.cat((squeeze, x_aux), dim=1)
+
+        attention = self.aux(squeeze)
+        if self.scale == self.shift:
+            v_scale, v_shift = torch.split(attention, self.split_size, dim=1)
+            v_scale = v_scale.view(*v_scale.size(), 1, 1, 1).expand_as(feature_map)
+            v_shift = v_shift.view(*v_shift.size(), 1, 1, 1).expand_as(feature_map)
+            if self.scale_activation is not None:
+                v_scale = self.scale_activation(v_scale)
+        elif self.scale is None:
+            v_scale = attention
+            v_scale = v_scale.view(*v_scale.size(), 1, 1, 1).expand_as(feature_map)
+            v_shift = self.shift
+            if self.scale_activation is not None:
+                v_scale = self.scale_activation(v_scale)
+        elif self.shift is None:
+            v_scale = self.scale
+            v_shift = attention
+            v_shift = v_shift.view(*v_shift.size(), 1, 1, 1).expand_as(feature_map)
+        else:
+            raise AssertionError(
+                f"Sanity checking on scale and shift failed. Must be of type bool or None: {self.scale}, {self.shift}"
+            )
+
+        return (v_scale * feature_map) + v_shift
+
+
 class FilmSeLUBase(nn.Module, metaclass=ABCMeta):
     """Absract base class for models that are related to FiLM of Perez et al"""
 
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        bn_momentum: float,
-        stride: int,
-        ndim_non_img: int,
-        location: int,
-        activation: str,
-        scale: bool,
-        shift: bool,
+            self,
+            in_channels: int,
+            out_channels: int,
+            bn_momentum: float,
+            stride: int,
+            ndim_non_img: int,
+            location: int,
+            activation: str,
+            scale: bool,
+            shift: bool,
     ) -> None:
 
         super().__init__()

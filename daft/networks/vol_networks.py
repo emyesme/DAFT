@@ -12,15 +12,15 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-from collections import OrderedDict
-from typing import Any, Dict, Optional, Sequence
 
 import torch
 import torch.nn as nn
-
 from ..models.base import BaseModel
-from .vol_blocks import ConvBnReLU, ConvBnSeLU, DAFTBlock, FilmBlock, ResBlock, ResSeLUBlock, ResDropoutBlock
-from .vol_blocks import ConvBnReLUDropout
+from collections import OrderedDict
+from typing import Any, Dict, Optional, Sequence
+from .vol_blocks import ConvBnReLU, ConvBnSeLU, ResSeLUBlock, DAFTBlock, FilmBlock, ResBlock, ResDropoutBlock
+from .vol_blocks import ConvBnReLUDropout, ConvBnPReLUDropout, ResDropoutPReLUBlock, DAFTPReLUBlock
+
 
 class HeterogeneousResNet(BaseModel):
     def __init__(self, in_channels=1, n_outputs=3, bn_momentum=0.1, n_basefilters=4) -> None:
@@ -59,14 +59,13 @@ class HeterogeneousResNet(BaseModel):
 
 class ConcatHNN1FC(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
     ) -> None:
-
         super().__init__()
         self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
@@ -102,15 +101,14 @@ class ConcatHNN1FC(BaseModel):
 
 class ConcatHNN2FC(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
-        bottleneck_dim: int = 7,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
+            bottleneck_dim: int = 7,
     ):
-
         super().__init__()
         self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
@@ -152,15 +150,14 @@ class ConcatHNN2FC(BaseModel):
 
 class ConcatHNNMCM(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
-        bottleneck_dim: int = 7,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
+            bottleneck_dim: int = 7,
     ) -> None:
-
         super().__init__()
         self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
@@ -205,14 +202,13 @@ class InteractiveHNN(BaseModel):
     """
 
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        ndim_non_img: int = 15,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            ndim_non_img: int = 15,
     ) -> None:
-
         super().__init__()
 
         # ResNet
@@ -283,12 +279,12 @@ class FilmHNN(BaseModel):
     """
 
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -326,14 +322,16 @@ class FilmHNN(BaseModel):
 
         return {"logits": out}
 
+
+# Variation of the DAFT network changing the activation function from ReLU to SeLU to experiment over it
 class DAFTSeLU(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -371,15 +369,16 @@ class DAFTSeLU(BaseModel):
 
         return {"logits": out}
 
-# this version have dropout
-class DAFT_v2(BaseModel):
+
+# Variation of the DAFT network with the 4d input without the dropout layers for experimental proposes
+class DAFT_v2_noDropout(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -387,11 +386,11 @@ class DAFT_v2(BaseModel):
             filmblock_args = {}
 
         self.split_size = 4 * n_basefilters
-        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
+        self.conv1 = ConvBnReLU(in_channels, n_basefilters, bn_momentum=bn_momentum)
         self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
-        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
-        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.7)  # 16
-        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2, dropout_p=0.7)  # 8
+        self.block1 = ResBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
+        self.block2 = ResBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
+        self.block3 = ResBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
         self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
         self.global_pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Linear(8 * n_basefilters, n_outputs)
@@ -414,18 +413,309 @@ class DAFT_v2(BaseModel):
         out = self.global_pool(out)
         out = out.view(out.size(0), -1)
         out = self.fc(out)
+        return {'logits': out}
 
-        return {"logits": out}
+
+# Variation of the DAFT network with the 4d input and dropout set to probability 0.4
+class DAFT_v2_d4(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.4)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.4)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.4)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.4)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+        return {'logits': out}
+
+# Variation of the DAFT network with the 4d input and dropout set to probability 0.5
+class DAFT_v2_d5(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.5)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.5)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.5)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+        return {'logits': out}
+
+
+# Variation of the DAFT network with the 4d input and dropout set to probability 0.6
+class DAFT_v2_d6(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.6)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.6)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+        return {'logits': out}
+
+# Variation of the DAFT network with the 4d input and dropout set to probability 0.6
+# and activation function of PReLU instead of ReLU
+class DAFT_v2_d6_prelu(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnPReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutPReLUBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.block2 = ResDropoutPReLUBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                           dropout_p=0.6)  # 16
+        self.block3 = ResDropoutPReLUBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                           dropout_p=0.6)  # 8
+        self.blockX = DAFTPReLUBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum,
+                                     **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+        return {'logits': out}
+
+
+# Variation of the DAFT network with the 4d input and dropout set to probability 0.7
+class DAFT_v2(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.7)
+        self.block2 = ResDropoutBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.7)  # 16
+        self.block3 = ResDropoutBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                      dropout_p=0.7)  # 8
+        self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+        return {'logits': out}
+
+
+# this version have dropout
+# Variation of the DAFT network with the 4d input and dropout set to probability 0.6
+# and activation function of PReLU instead of ReLU
+# changing the type of the forward output for compatibility propoese with captum to apply explainability
+class DAFT_v2_d6_prelu_captum(BaseModel):
+    def __init__(
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
+    ) -> None:
+        super().__init__()
+
+        if filmblock_args is None:
+            filmblock_args = {}
+
+        self.split_size = 4 * n_basefilters
+        self.conv1 = ConvBnPReLUDropout(in_channels, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.pool1 = nn.MaxPool3d(2, stride=2)  # 32
+        self.block1 = ResDropoutPReLUBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum, dropout_p=0.6)
+        self.block2 = ResDropoutPReLUBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                           dropout_p=0.6)  # 16
+        self.block3 = ResDropoutPReLUBlock(2 * n_basefilters, 4 * n_basefilters, bn_momentum=bn_momentum, stride=2,
+                                           dropout_p=0.6)  # 8
+        self.blockX = DAFTPReLUBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum,
+                                     **filmblock_args)  # 4
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Linear(8 * n_basefilters, n_outputs)
+
+    @property
+    def input_names(self) -> Sequence[str]:
+        return ("image", "tabular")
+
+    @property
+    def output_names(self) -> Sequence[str]:
+        return ("logits",)
+
+    def forward(self, image, tabular):
+        out = self.conv1(image)
+        out = self.pool1(out)
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.blockX(out, tabular)
+        out = self.global_pool(out)
+        out = out.view(out.size(0), -1)
+        out = self.fc(out)
+        return out
 
 
 class DAFT(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -463,14 +753,16 @@ class DAFT(BaseModel):
 
         return {"logits": out}
 
+
+# Variation of the original DAFT network without the DAFT block for experimentation proposes
 class noDAFT(BaseModel):
     def __init__(
-        self,
-        in_channels: int,
-        n_outputs: int,
-        bn_momentum: float = 0.1,
-        n_basefilters: int = 4,
-        filmblock_args: Optional[Dict[Any, Any]] = None,
+            self,
+            in_channels: int,
+            n_outputs: int,
+            bn_momentum: float = 0.1,
+            n_basefilters: int = 4,
+            filmblock_args: Optional[Dict[Any, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -483,7 +775,7 @@ class noDAFT(BaseModel):
         self.block1 = ResBlock(n_basefilters, n_basefilters, bn_momentum=bn_momentum)
         self.block2 = ResBlock(n_basefilters, 2 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 16
         self.block3 = ResBlock(2 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, stride=2)  # 8
-        #self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
+        # self.blockX = DAFTBlock(4 * n_basefilters, 8 * n_basefilters, bn_momentum=bn_momentum, **filmblock_args)  # 4
         self.global_pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Linear(8 * n_basefilters, n_outputs)
 
@@ -501,70 +793,9 @@ class noDAFT(BaseModel):
         out = self.block1(out)
         out = self.block2(out)
         out = self.block3(out)
-        #out = self.blockX(out, tabular)
+        # out = self.blockX(out, tabular)
         out = self.global_pool(out)
         out = out.view(out.size(0), -1)
         out = self.fc(out)
 
         return {"logits": out}
-
-
-class Siamese(BaseModel):
-    def __init__(
-            self,
-            in_channels: int,
-            n_outputs: int,
-            bn_momentum: float = 0.1,
-            n_basefilters: int = 4,
-            filmblock_args: Optional[Dict[Any, Any]] = None,
-    ) -> None:
-        super().__init__()
-        kernel_size = 3
-        stride = 1
-        padding = 1
-
-        self.cnn1 = nn.Sequential(
-            nn.Conv3d(in_channels, n_basefilters, kernel_size, stride=stride, padding=padding, bias=False),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm3d(n_basefilters, momentum=bn_momentum),
-
-            nn.Conv3d(4 * in_channels, 2 * n_basefilters , kernel_size, stride=stride, padding=padding, bias=False),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm3d(2 * n_basefilters, momentum=bn_momentum),
-
-            nn.Conv3d(8 * in_channels, 2 * n_basefilters, kernel_size, stride=stride, padding=padding, bias=False),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm3d(2 * n_basefilters, momentum=bn_momentum),
-        )
-
-        self.fc1 = nn.Sequential(
-            nn.Linear(8 * n_basefilters, 4 * n_basefilters),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(4 * n_basefilters, 2 * n_basefilters),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(2 * n_basefilters, n_basefilters),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(n_basefilters, n_outputs)
-        )
-
-    @property
-    def input_names(self) -> Sequence[str]:
-        return ("image", "tabular")
-
-    @property
-    def output_names(self) -> Sequence[str]:
-        return ("logits",)
-
-    def forward_once(self, image, tabular):
-        out = self.cnn1(image)
-        out = out.view(out.size()[0], -1)
-        out = self.fc1(out)
-        return out
-
-    def forward(self, image1, tabular1, image2, tabular2):
-        out1 = self.forward_once(image1, tabular1)
-        out2 = self.forward_once(image2, tabular2)
-        return {"logits": [out1, out2]}

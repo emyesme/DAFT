@@ -12,19 +12,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-from itertools import chain
-from operator import itemgetter
-from typing import Dict, Optional, Sequence, Union
+
 
 import torch
-from torch import Tensor
-from torch.optim.lr_scheduler import _LRScheduler
-from torch.optim.optimizer import Optimizer
 from tqdm import tqdm
-
-from ..models.base import BaseModel, check_is_unique
 from .hooks import Hook
+from torch import Tensor
+from itertools import chain
+from operator import itemgetter
 from .wrappers import DataLoaderWrapper
+from torch.optim.optimizer import Optimizer
+from torch.optim.lr_scheduler import _LRScheduler
+from typing import Dict, Optional, Sequence, Union
+from ..models.base import BaseModel, check_is_unique
 
 
 def train_and_evaluate(
@@ -92,7 +92,8 @@ def train_and_evaluate(
     )
     get_lr = itemgetter("lr")
 
-    early_stopping = EarlyStopping(tolerance=10, min_delta=10)
+    # early stopping strategy class creation
+    early_stopping = EarlyStopping(tolerance=5, min_delta=5)
 
     for i in range(num_epochs):
         lr = [get_lr(pg) for pg in optimizer.param_groups]
@@ -101,7 +102,8 @@ def train_and_evaluate(
         if evaluator is not None:
             evaluator.run()
         if scheduler is not None:
-            #scheduler.step(evaluator.outputs['cross_entropy'])
+            # We tasted over different schedulers some of them require a metric to change their factor
+            # scheduler.step(evaluator.outputs['cross_entropy'])
             scheduler.step()
 
         # early stopping
@@ -109,6 +111,7 @@ def train_and_evaluate(
         if early_stopping.early_stop:
             print("we apply early stopping at epoch : ", i)
             break
+
 
 class EarlyStopping:
     def __init__(self, tolerance=5, min_delta=0):

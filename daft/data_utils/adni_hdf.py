@@ -16,13 +16,11 @@ import enum
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
-import PIL
 import h5py
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
-from torchvision.transforms import functional as F
 import random
 
 class Constants:
@@ -58,13 +56,11 @@ DIAGNOSIS_CODES_MULTICLASS = {
     "PP": np.array(3, dtype=np.int64),
 }
 
-
 DIAGNOSIS_CODES_MULTICLASS3 = {
     "0EDSS": np.array(0, dtype=np.int64),
     "1EDSS": np.array(1, dtype=np.int64),
     "2EDSS": np.array(2, dtype=np.int64),
 }
-
 
 PROGRESSION_STATUS = {
     "no": np.array([0], dtype=np.uint8),
@@ -116,6 +112,12 @@ def MinmaxRescaling(x: np.ndarray) -> np.ndarray:
     fit_min = fit_normalise([seq1_min, seq2_min], x.shape, 0)
 
     return (x - fit_min) / (fit_max - fit_min)
+
+
+def MinmaxRescalingChannel(x: np.ndarray) -> np.ndarray:
+    min_val = x.min()
+
+    return (x - min_val) / (x.max() - min_val)
 
 
 class Task(enum.Enum):
@@ -370,7 +372,9 @@ def _get_image_dataset_transform(
         img_transforms.append(transforms.Lambda(lambda x: x / max_val))
 
     if minmax_rescale:
+        # when we change the input channels to 1 is the line 379
         img_transforms.append(MinmaxRescaling)
+        #img_transforms.append(MinmaxRescalingChannel)
 
     if with_mean is not None or with_std is not None:
         if with_mean is None:
@@ -394,8 +398,11 @@ def _get_image_dataset_transform(
 
     return transforms.Compose(img_transforms)
 
+# gaussian_noise : torch.Tensor -> torch.Tensor
+# The function receive the 4d image that contain binary lesion mask, flair and T1 volumes
+# It performs injection of gaussian noise in the channels separately with a 50% probability
+# and concatenate the final result to the same dimensions as the input
 def gaussian_noise(img: torch.Tensor) -> torch.Tensor:
-
     out = img
     # mask
     channel1 = torch.as_tensor(img.numpy()[0, ...])
@@ -417,6 +424,10 @@ def gaussian_noise(img: torch.Tensor) -> torch.Tensor:
 
     return out
 
+# t4_RandomHorizontalFlip : np.ndarray -> torch.Tensor
+# The function receive the 4d image that contain binary lesion mask, flair and T1 volumes
+# IT performs horizontal flip (left - right) in the channels separately with a 50% probability
+# and concatenate the final result to the same dimensions as the input
 def t4f_RandomHorizontalFlip(img: np.ndarray) -> torch.Tensor:
     # if no transformation change the variable return the same
     out = img
@@ -427,9 +438,7 @@ def t4f_RandomHorizontalFlip(img: np.ndarray) -> torch.Tensor:
     # t1
     channel3 = img[2, ...]
 
-    # I think I should use it as tensor not image
     if random.random() < 0.5:
-        #print("adni_hdf aug flip")
         channel1 = np.transpose(channel1)
         channel2 = np.transpose(channel2)
         channel3 = np.transpose(channel3)
@@ -440,11 +449,13 @@ def t4f_RandomHorizontalFlip(img: np.ndarray) -> torch.Tensor:
     return out
 
 
+# _get_img_aug_transform: Class -> Class
+# It receive the type of task that is being processed
+# return the transform.compose class if is one of the valid tasks
 def _get_img_aug_transform(task: Task) -> DataTransformFn:
     if task in {Task.BINARY_CLASSIFICATION, Task.MULTI_CLASSIFICATION, Task.MULTI_CLASSIFICATION3}:
         img_aug_transform = transforms.Compose([
             transforms.Lambda(t4f_RandomHorizontalFlip),
-            #transforms.RandomAffine(degrees=(-30, 30), translate=(0.01, 0.02), scale=(0.7, 0.02)),
             transforms.Lambda(gaussian_noise)
         ]
         )
@@ -583,14 +594,14 @@ def get_heterogeneous_dataset_for_train(
         If both rescale and standardize are True.
     """
     target_transform = _get_target_transform(task)
+    # if I want to perform augmentation in the experiment comment or uncomment this line and 605
     #img_transform = _get_img_aug_transform(task)
-
 
     ds = HDF5DatasetHeterogeneous(
         filename,
         dataset_name,
         task.labels,
-        #transform=img_transform,
+        #transform=img_transform,#augmentation
         target_transform=target_transform,
         baseline_only=(dataset == "baseline"),
         drop_missing=drop_missing,

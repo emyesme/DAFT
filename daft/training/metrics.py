@@ -12,13 +12,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with DAFT. If not, see <https://www.gnu.org/licenses/>.
-from abc import ABCMeta, abstractmethod
-from typing import Dict
-
-import numpy as np
 import torch
-from sksurv.metrics import concordance_index_censored
+import numpy as np
+from typing import Dict
 from torch import Tensor
+from abc import ABCMeta, abstractmethod
+from sksurv.metrics import concordance_index_censored
 
 
 class Metric(metaclass=ABCMeta):
@@ -166,7 +165,6 @@ class BalancedAccuracy(Metric):
         return False
 
     def values(self) -> Dict[str, float]:
-        print("balanced accuracy ", self._correct, " / ", self._total)
         value = np.mean(self._correct / self._total)
         return {"balanced_accuracy": value}
 
@@ -192,6 +190,8 @@ class BalancedAccuracy(Metric):
             self._correct[i] += is_correct[target_tensor == i].sum()
 
 
+# New metric of confusion matrix that use values_matrix instead of values as the function to extract the metric
+# This for compatibility proposes of value type in the dictionary structure
 class ConfusionMatrix(Metric):
     ''' Compute confusion matrix
 

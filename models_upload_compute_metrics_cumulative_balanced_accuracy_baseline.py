@@ -2,19 +2,21 @@ import importlib
 
 import os
 import torch
-import numpy as np
-import pandas as pd
+import nibabel
+import nibabel as nib
 import seaborn as sn
+import pandas as pd
+from matplotlib import pyplot as plt
+import numpy as np
 from pathlib import Path
 from torch import Tensor
+from captum.attr import Saliency
 from captum.attr import LayerGradCam
-from matplotlib import pyplot as plt
 from daft.training.metrics import Metric
-from typing import Dict, Sequence, Tuple
-from sklearn.metrics import confusion_matrix
 from daft.data_utils.adni_hdf import Constants
 from daft.testing.test_and_save import ModelTester
 from daft.cli import HeterogeneousModelFactory, create_parser
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
 
 
 def load_model(
@@ -51,7 +53,11 @@ def load_model(
     best_discriminator = factory.get_and_init_model()
     best_discriminator.load_state_dict(torch.load(best_net_path))
 
-    return factory, best_discriminator, test_loader
+    ######## type of method for explainability
+    best_discriminator.eval()
+    model = Saliency(best_discriminator)
+
+    return factory, model, best_discriminator, test_loader
 
 
 def evaluate_model(*, metrics: Sequence[Metric], **kwargs) -> Tuple[Dict[str, float], Dict[str, Tensor]]:
@@ -83,6 +89,7 @@ def evaluate_model(*, metrics: Sequence[Metric], **kwargs) -> Tuple[Dict[str, fl
     metrics_dict = {}
     for i, m in enumerate(metrics):
         if i == (len(metrics) - 1):
+            #print("last metric")
             m.reset()
             m.update(inputs=unconsumed_inputs, outputs=predictions)
             metrics_dict.update(m.values_matrix())
@@ -94,7 +101,6 @@ def evaluate_model(*, metrics: Sequence[Metric], **kwargs) -> Tuple[Dict[str, fl
     predictions.update(unconsumed_inputs)
     return metrics_dict, predictions
 
-
 def get_model_inputs_from_batch(batch: Dict[int, Tensor]) -> Sequence[Tensor]:
     # to get rid of unnecessary dimensions when adding multiple channels
     batch[0] = batch[0].squeeze(0)
@@ -102,72 +108,49 @@ def get_model_inputs_from_batch(batch: Dict[int, Tensor]) -> Sequence[Tensor]:
     return in_batch
 
 
-def get_folders(experiments_dir, exp_name):
-    _, folders, _ = next(os.walk(os.path.join(experiments_dir, exp_name)))
-    folders.sort()
-
-    if ("4classes" in exp_name) or ("4group" in exp_name):
-        num_classes = 4
-    elif ("2classes" in exp_name) or ("2group" in exp_name):
-        num_classes = 2
-    else:
-        num_classes = 3
-
-    return folders, num_classes
-
-def get_datafiles_names(num_classes, num):
-    if num_classes != 3:
-        train_file = "manualfile_" + str(num_classes) + "g_train_fold" + str(num + 1) + ".h5"
-        val_file = "manualfile_" + str(num_classes) + "g_val_fold" + str(num + 1) + ".h5"
-        test_file = "manualfile_" + str(num_classes) + "g_test_fold" + str(num + 1) + ".h5"
-    else:
-        train_file = "manualfile_" + str(num_classes) + "edss_train_fold" + str(num + 1) + ".h5"
-        val_file = "manualfile_" + str(num_classes) + "edss_val_fold" + str(num + 1) + ".h5"
-        test_file = "manualfile_" + str(num_classes) + "edss_test_fold" + str(num + 1) + ".h5"
-
-    return train_file, val_file, test_file
-
 def main():
+    # fold 1 no augmentation
+    experiment_name_daft_2g = [#"10may_2group_augmentation_manualfile",
+                               #"11may_2group_NOdropout_NOaugmentation_manualfile",
+                            "11may_2group_NOaugmentation_manuallfile",
+                            "2group_Nodropout_augmentation_manualfile"
+                            ]
 
-    experiment_name = ['2classes_daft_v2_d6_prelu_augmentation',
-             '3classes_daft_v2_d6_prelu_augmentation',
-             '4classes_daft_v2_d6_prelu_augmentation',
-             "11may_2group_NOdropout_NOaugmentation_manualfile",
-             "11may_3edss_NOdropout_NOaugmentation_manualfile",
-             '11may_4group_NOdropout_NOaugmentation_manualfile',
-             '2classes_daft_v2_d6',
-             '3classes_daft_v2_d6',
-             '4classes_daft_v2_d6',
-             "4group_Nodropout_augmentation_manualfile",
-             "2group_Nodropout_augmentation_manualfile",
-             "3edss_Nodropout_augmentation_manualfile",
-             '2classes_daft_v2_d6_augmentation',
-             '3classes_daft_v2_d6_augmentation',
-             '4classes_daft_v2_d6_augmentation',
-             ]
+    experiment_name_daft_ed = ["10may_3edss_augmentation_manualfile",
+                               "11may_3edss_NOdropout_NOaugmentation_manualfile",
+                            "11may_3edss_NOaugmentation_manualfile",
+                            "3edss_Nodropout_augmentation_manualfile"
+                            ]
 
-    corresponding_net = ["daft_v2_d6_prelu",
-                         "daft_v2_d6_prelu",
-                         "daft_v2_d6_prelu",
-                         "daft_v2",
-                         "daft_v2",
-                         "daft_v2",
-                         "daft_v2_d6",
-                         "daft_v2_d6",
-                         "daft_v2_d6",
-                         "daft_v2",
-                         "daft_v2",
-                         "daft_v2",
-                         "daft_v2_d6",
-                         "daft_v2_d6",
-                         "daft_v2_d6"
-                         ]
+    experiment_name_daft_4g = ["11may_4group_NOaugmentation_manualfile",
+                            "10may_4group_augmentation_manualfile",
+                            "4group_Nodropout_augmentation_manualfile",
+                            "4group_NOaugmentation_nodaft_manualfile"]
+
+    experiments_dropout = [#"11may_2group_NOaugmentation_manualfile",
+                            #"2group_Nodropout_augmentation_manualfile",
+                           #"10may_3edss_augmentation_manualfile",
+                            #"11may_3edss_NOdropout_NOaugmentation_manualfile",
+                            #"11may_3edss_NOaugmentation_manualfile",
+                            #"3edss_Nodropout_augmentation_manualfile",
+                            #"11may_4group_NOaugmentation_manualfile",
+                            #"10may_4group_augmentation_manualfile",
+                            #"4group_Nodropout_augmentation_manualfile"
+                            '11may_4group_NOdropout_NOaugmentation_manualfile']
+
+    experiments_d = ["2classes_nodaft",
+                     "3classes_nodaft",
+                     "4classes_nodaft"]
+
+    corresponding_net = ["nodaft",
+                         "nodaft",
+                         "nodaft"]
 
     experiments_dir = "/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/experiments_clf"
 
     predictions_dict = {}
 
-    for exp_name, net in zip(experiment_name, corresponding_net):
+    for exp_name, net in zip(experiments_d, corresponding_net):
 
         if not os.path.exists(os.path.join(experiments_dir, exp_name)):
             print(" the path ", exp_name, " doesnt exist!")
@@ -175,15 +158,28 @@ def main():
         else:
             print("experiment ", exp_name)
 
-        print("start experiment metrics: ", exp_name)
-        folders, num_classes = get_folders(experiments_dir, exp_name)
+        _, folders, _ = next(os.walk(os.path.join(experiments_dir, exp_name)))
+        folders.sort()
+
+        if "4classes" in exp_name:
+            num_classes = 4
+        elif "2classes" in exp_name:
+            num_classes = 2
+        else:
+            num_classes = 3
 
         for num, folder in enumerate(folders):
 
-            train_file, val_file, test_file = get_datafiles_names(num_classes, num)
+            if num_classes != 3:
+                train_file = "manualfile_" + str(num_classes) + "g_train_fold" + str(num + 1) + ".h5"
+                val_file = "manualfile_" + str(num_classes) + "g_val_fold" + str(num + 1) + ".h5"
+                test_file = "manualfile_" + str(num_classes) + "g_test_fold" + str(num + 1) + ".h5"
+            else:
+                train_file = "manualfile_" + str(num_classes) + "edss_train_fold" + str(num + 1) + ".h5"
+                val_file = "manualfile_" + str(num_classes) + "edss_val_fold" + str(num + 1) + ".h5"
+                test_file = "manualfile_" + str(num_classes) + "edss_test_fold" + str(num + 1) + ".h5"
 
-            # load the checkpoint model with the given folder, network, number of classes, data, channels and batch size
-            factory, model, test_loader = load_model(
+            factory, saliency, model, test_loader = load_model(
                 os.path.join(experiments_dir, exp_name, folder, "checkpoints"),
                 "/home/ecarvajal /Desktop/MyCloneDAFT/DAFT/data_dir",
                 "it doesnt affect",
@@ -196,16 +192,14 @@ def main():
                 str(3)
             )
 
-            # to print model input and output sizes in every layer
-            # It will not work using the daft block structure incompatible
-            #from torchinfo import summary
-            #summary(model, ((16, 3, 181, 217, 181), (16, 1)), device='cpu')
+            # cumulate models or cumulate predictions?
 
-
-            # upload all the predictions and metrics outputs given the given model and test set dataloader
             metrics_fold, preds = evaluate_model(
                 metrics=factory.get_test_metrics(), model=model, data=test_loader, progressbar=True,
             )
+
+            targets = preds['target']
+            predictions_dict["fold"+str(num+1)] = preds['logits']
 
             targets = preds['target']
             predictions_dict["fold" + str(num + 1)] = preds['logits']
@@ -215,47 +209,27 @@ def main():
 
         probs_dict = {}
 
-        # the predictions are a tensor with one of several values. This depends on the task
-        # to compute the probability is necessary to apply a sigmoid function
         for k, v in predictions_dict.items():
             probs_dict[k] = torch.sigmoid(v).detach().numpy()
 
-        # we concatenate the probabilities of each fold
         new_probs = np.mean([probs_dict["fold1"], probs_dict["fold2"], probs_dict["fold3"]], axis=0)
         if num_classes == 2:
+
             pred2 = torch.zeros([new_probs.shape[0], 2])
             pred2[new_probs[:, 0] > 0.5, 1] = 1
             pred2[new_probs[:, 0] <= 0.5, 0] = 1
             new_probs = pred2
 
-        # get the prediction with the maximum probability from the probabilities of the folds
         new_pred = new_probs.argmax(axis=1)
 
-        # confusion matrix computation
+        # confusion matrices
+        from sklearn.metrics import confusion_matrix
+
         matrix = confusion_matrix(targets, new_pred)
 
         print("confusion matrix ", matrix)
 
-        if matrix.shape[0] == 2:
-            classes = Constants.DIAGNOSIS_CODES_BINARY.keys()
-        elif matrix.shape[0] == 3:
-            classes = Constants.DIAGNOSIS_CODES_MULTICLASS3.keys()
-        elif matrix.shape[0] == 4:
-            classes = Constants.DIAGNOSIS_CODES_MULTICLASS.keys()
-
-        # ensemble confusion matrix drawing in the corresponding folder
-        df_cm = pd.DataFrame(matrix,
-                             index=[i for i in classes],
-                             columns=[i for i in classes])
-        plt.figure(figsize=(12, 7))
-        fig_conf_matrix = sn.heatmap(df_cm, annot=True).get_figure()
-        fig_conf_matrix.savefig(os.path.join(experiments_dir,
-                                             exp_name,
-                                             "acum_confmatrix_" + exp_name + "_test_fold" + str(num + 1) + ".png"))
-
-        ########################################
-
-        # balanced accuracy computation
+        # balanced accuracy
         correct = np.zeros(num_classes)
         total = np.zeros(num_classes)
 
@@ -274,7 +248,7 @@ def main():
         balanced_accuracy = np.mean(correct / total)
 
         print("metrics experiment: ", exp_name, " balanced_accuracy: ", balanced_accuracy)
-        print("end experiment metrics: ", exp_name)
+
 
 if __name__ == "__main__":
     main()

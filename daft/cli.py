@@ -58,7 +58,7 @@ def create_parser():
     g = parser.add_argument_group("Architecture")
     g.add_argument(
         "--discriminator_net",
-        choices=["resnet", "concat1fc", "concat2fc", "mlpcatmlp", "duanmu", "film", "daft", "daft_v2", "daftselu", "nodaft"],
+        choices=["resnet", "concat1fc", "concat2fc", "mlpcatmlp", "duanmu", "film", "daft", "daft_v2", "daft_v2_captum", "daft_v2_nodropout", "daft_v2_d4", "daft_v2_d5", "daft_v2_d6", "daft_v2_d6_prelu", "daftselu", "nodaft"],
         default="daft",
         help="which architecture to use. Default: %(default)s",
     )
@@ -447,6 +447,8 @@ class HeterogeneousModelFactory(BaseModelFactory):
         testDataLoader = self._make_named_data_loader(test_data, ["image", "tabular"])
         return trainDataLoader, valDataLoader, testDataLoader
 
+
+
     def get_model(self):
         args = self.args
         class_dict = {
@@ -458,6 +460,12 @@ class HeterogeneousModelFactory(BaseModelFactory):
             "film": vol_networks.FilmHNN,
             "daft": vol_networks.DAFT,
             "daft_v2": vol_networks.DAFT_v2,
+            "daft_v2_captum": vol_networks.DAFT_v2_captum,
+            "daft_v2_nodropout": vol_networks.DAFT_v2_noDropout,
+            "daft_v2_d4": vol_networks.DAFT_v2_d4,
+            "daft_v2_d5": vol_networks.DAFT_v2_d5,
+            "daft_v2_d6": vol_networks.DAFT_v2_d6,
+            "daft_v2_d6_prelu": vol_networks.DAFT_v2_d6_prelu,
             "daftselu": vol_networks.DAFTSeLU,
             "nodaft": vol_networks.noDAFT###
         }
